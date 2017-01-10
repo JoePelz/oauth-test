@@ -9,6 +9,8 @@ urls = (
     '/', 'Public',  # Omit the overview page and go straight to map (no content in overview anyway)
     '/public', 'Public',
     '/private', 'Private',
+    '/login', 'Login',
+    '/logout', 'Logout',
 )
 
 # This is the URL we'll send the user to first to get their authorization
@@ -70,6 +72,10 @@ def getRequest(url, headers=None, args=None):
     if not headers:
         headers = {}
 
+    headers['Accept'] = "application/json"
+    if 'access_token' in session:
+        headers['Authorization'] = 'Bearer {0}'.format(session['access_token'])
+
     request = urllib2.Request(augmented_url, headers=headers)
     response = urllib2.urlopen(request).read()
 
@@ -90,6 +96,10 @@ def postRequest(url, headers=None, args=None):
 
     if not headers:
         headers = {}
+
+    headers['Accept'] = "application/json"
+    if 'access_token' in session:
+        headers['Authorization'] = 'Bearer {0}'.format(session['access_token'])
 
     request = urllib2.Request(url, headers=headers)
     response = urllib2.urlopen(request, args).read()
@@ -173,6 +183,18 @@ class Login(object):
     def POST(self):
         print("LOGIN POST".center(50, '='))
         GET_data = web.input()
+
+class Logout(object):
+    def GET(self):
+        print("LOGOUT GET".center(50, '='))
+        session.kill()
+        raise web.seeother("/public")
+
+    def POST(self):
+        print("LOGOUT POST".center(50, '='))
+        self.GET()
+        raise web.seeother("/public")
+
 
 # Manage routing from here. Regex matches URL and chooses class by name
 
