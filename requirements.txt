@@ -1,2 +1,4 @@
+oauthlib==2.0.1
 pkg-resources==0.0.0
+pysqlite==2.8.3
 web.py==0.38
