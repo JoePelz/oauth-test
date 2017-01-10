@@ -14,10 +14,10 @@ urls = (
 )
 
 # This is the URL we'll send the user to first to get their authorization
-authorizeURL = 'localhost:8081/authorize'
+authorizeURL = 'http://localhost:8081/authorize'
 
 # This is the endpoint our server will request an access token from
-tokenURL = 'localhost:8081/token'
+tokenURL = 'http://localhost:8081/token'
 
 
 app = web.application(urls, globals())
@@ -33,29 +33,6 @@ render = web.template.render('./')
 # ====================================================
 
 
-def apiRequest(url, post=False, headers=None):
-    if headers is None:
-        headers = []
-
-    # $ch = curl_init($url);
-    # curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
-
-    if post:
-        # curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($post));
-        pass
-
-    headers.append('Accept: application/json')
-
-    if 'access_token' in session:
-        headers.append('Authorization: Bearer {0}'.format(session['access_token']))
-
-    # curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-
-    # $response = curl_exec($ch);
-    response = '{"error": "response not retreived"}'
-
-    return json.loads(response)
-
 def getRequest(url, headers=None, args=None):
     """
     :param url:  The url to send the request to.  e.g.  https://example.org/test
@@ -63,7 +40,7 @@ def getRequest(url, headers=None, args=None):
     :param args: dictionary of GET parameters to urlencode and append to the url
     :return: the server response
     """
-
+    print("Making GET request to {0}".format(url))
     if args:
         augmented_url = "{0}?{1}".format(url, urllib.urlencode(args))
     else:
@@ -85,10 +62,10 @@ def postRequest(url, headers=None, args=None):
     """
     :param url:  The url to send the request to.  e.g.  https://example.org/test
     :param headers:  dictionary of headers. e.g. {"Accepts": "text/html"}
-    :param args: dictionary of GET parameters to urlencode and append to the url
+    :param args: dictionary of POST parameters to urlencode and append to the url
     :return: the server response
     """
-
+    print("Making POST request to {0}".format(url))
     if args:
         post_data = urllib.urlencode(args)
     else:
@@ -102,10 +79,9 @@ def postRequest(url, headers=None, args=None):
         headers['Authorization'] = 'Bearer {0}'.format(session['access_token'])
 
     request = urllib2.Request(url, headers=headers)
-    response = urllib2.urlopen(request, args).read()
+    response = urllib2.urlopen(request, post_data).read()
 
     return response
-
 
 
 class Public(object):
@@ -122,24 +98,24 @@ class Public(object):
 
 class Private(object):
     def retrieve_key(self, GET_data):
-            # Verify the state matches our stored state
-            if 'state' not in GET_data or GET_data['state'] != session['state']:
-                print("State salt does not match.")
-                raise web.seeother("/public")
+        # Verify the state matches our stored state
+        if 'state' not in GET_data or GET_data['state'] != session['state']:
+            print("State salt does not match.")
+            raise web.seeother("/public")
 
-            # Exchange the auth code for a token
-            params = {
-                'client_id': "12345",
-                'client_secret': 'abcde',
-                'redirect_uri': 'http://localhost:8080/private',
-                'state': session['state'],
-                'code': GET_data['code']
-            }
-            token = postRequest(tokenURL, args=params)
-            print("token received:\n{0}".format(token))
-            session['access_token'] = token
+        # Exchange the auth code for a token
+        params = {
+            'client_id': "12345",
+            'client_secret': 'abcde',
+            'redirect_uri': 'http://localhost:8080/private',
+            'state': session['state'],
+            'code': GET_data['code']
+        }
+        token = postRequest(tokenURL, args=params)
+        print("token received:\n{0}".format(token))
+        session['access_token'] = token
 
-            raise web.seeother("/private")
+        raise web.seeother("/private")
 
     def GET(self):
         print("PRIVATE GET".center(50, '='))
@@ -151,6 +127,7 @@ class Private(object):
         if 'access_token' in session:
             return render.private_page()
         else:
+            print("redirecting to /public".format(authorizeURL, qstring))
             raise web.seeother("/public")
 
     def POST(self):
@@ -178,11 +155,13 @@ class Login(object):
 
         # Redirect the user to the authorization page
         qstring = urllib.urlencode(params)
+        print("redirecting to {0}?{1}".format(authorizeURL, qstring))
         raise web.seeother("{0}?{1}".format(authorizeURL, qstring))
 
     def POST(self):
         print("LOGIN POST".center(50, '='))
         GET_data = web.input()
+
 
 class Logout(object):
     def GET(self):
