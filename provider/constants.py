@@ -17,6 +17,7 @@ urls = (
 db_path = os.path.join(BASE_PATH, *DBPATH)
 db_path = os.path.join(db_path, DBFILENAME)
 db = web.database(dbn='sqlite', db=db_path)
+db.query("PRAGMA foreign_keys = ON;")
 
 render = web.template.render('./')
 
