@@ -2,14 +2,35 @@ import socket
 import ssl
 
 
-# gen certificate:
+# gen self-signed certificate:
 # openssl req -x509 -sha256 -nodes -newkey rsa:2048 -days 365 -keyout localhost.key -out localhost.crt
+# to use in firefox, install exception for localhost certificate. May need to restart server a few times while doing so.
+
+example_response = \
+"""HTTP/1.1 200 OK
+Date: Sun, 18 Oct 2009 08:56:53 GMT
+Server: Apache/2.2.14 (Win32)
+Last-Modified: Sat, 20 Nov 2004 07:16:26 GMT
+ETag: "10000000565a5-2c-3e94b66c2e680"
+Accept-Ranges: bytes
+Content-Length: 44
+Connection: close
+Content-Type: text/html
+X-Pad: avoid browser bug
+
+<html><body><h1>It works!</h1></body></html>"""
+
 
 def do_something(connection_stream, data):
     print(" Do something ".center(50, '='))
+    print(" dir(connection_stream) ".center(50, '-'))
     print(dir(connection_stream))
+    print(" connection_stream ".center(50, '-'))
     print(connection_stream)
+    print(" data ".center(50, '-'))
     print(data)
+    print(" end ".center(50, '-'))
+    connection_stream.sendall(example_response)
 
 
 def deal_with_client(connection_stream):
@@ -26,7 +47,7 @@ def deal_with_client(connection_stream):
 
 def main():
     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    context.load_cert_chain(certfile="mycertfile", keyfile="mykeyfile")
+    context.load_cert_chain(certfile="./localhost.crt", keyfile="./localhost.key")
 
     bindsocket = socket.socket()
     bindsocket.bind(('localhost', 8081))
