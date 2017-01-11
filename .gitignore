@@ -97,4 +97,9 @@ ENV/
 # webpy sessions
 sessions/
 
+# database files
 *.db
+
+# ssl certificate files
+*.crt
+*.key
