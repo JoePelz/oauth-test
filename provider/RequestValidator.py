@@ -1,6 +1,8 @@
 import constants
 from oauthlib.oauth2 import RequestValidator
 from models.clients import Clients
+from models.authorization_code import AuthorizationCode
+from models.bearer_token import BearerToken
 
 
 class MyRequestValidator(RequestValidator):
@@ -28,7 +30,7 @@ class SkeletonValidator(RequestValidator):
         # the client previously registered this EXACT redirect uri.
         client = self.clients.get(client_id)
         uris = client.redurect_uris.split(",")
-        return redirect_uri in uris
+        return redirect_uri and redirect_uri in uris
 
     def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
         # The redirect used if none has been supplied.
@@ -53,7 +55,8 @@ class SkeletonValidator(RequestValidator):
         # Clients should only be allowed to use one type of response type, the
         # one associated with their one allowed grant type.
         # In this case it must be "code".
-        pass
+        client = self.clients.get(client_id)
+        return response_type == client.response_type
 
     # Post-authorization
 
@@ -61,13 +64,23 @@ class SkeletonValidator(RequestValidator):
         # Remember to associate it with request.scopes, request.redirect_uri
         # request.client, request.state and request.user (the last is passed in
         # post_authorization credentials, i.e. { 'user': request.user}.
-        pass
+        code_string = code['code']
+        state = code.get('state', '')
+        auth = AuthorizationCode(constants.db)
+        auth.set(client_id=request.client,
+                 user=request.user,
+                 code=code,
+                 scopes=",".join(request.scopes),
+                 state=state,
+                 redirect_uri=request.redirect_uri)
 
     # Token request
 
     def authenticate_client(self, request, *args, **kwargs):
         # Whichever authentication method suits you, HTTP Basic might work
-        pass
+        # TODO: generate secret for each client app. Use client id and secret to authenticate client.
+        # see https://github.com/evonove/django-oauth-toolkit/blob/master/oauth2_provider/oauth2_validators.py#L51
+        return True
 
     def authenticate_client_id(self, client_id, request, *args, **kwargs):
         # Don't allow public (non-authenticated) clients
@@ -76,16 +89,31 @@ class SkeletonValidator(RequestValidator):
     def validate_code(self, client_id, code, client, request, *args, **kwargs):
         # Validate the code belongs to the client. Add associated scopes,
         # state and user to request.scopes and request.user.
-        pass
+        auth = AuthorizationCode(constants.db)
+        match = auth.match(client_id=client, code=code)
+        # TODO: test if expiration time is passed
+        # TODO: test if state (salt) matches
+        if match:
+            request.scope = match.scopes.split(",")
+            request.user = match.user
+            request.state = match.state
+            return True
+        else:
+            return False
 
     def confirm_redirect_uri(self, client_id, code, redirect_uri, client, *args, **kwargs):
         # You did save the redirect uri with the authorization code right?
-        pass
+        auth = AuthorizationCode(constants.db)
+        match = auth.match(client_id=client, code=code)
+        if not match:
+            return False
+        saved_redirect_uri = match.redirect_uri
+        return saved_redirect_uri == redirect_uri
 
     def validate_grant_type(self, client_id, grant_type, client, request, *args, **kwargs):
         # Clients should only be allowed to use one type of grant.
         # In this case, it must be "authorization_code" or "refresh_token"
-        pass
+        return grant_type in ['authorization_code', 'refresh_token']
 
     def save_bearer_token(self, token, request, *args, **kwargs):
         # Remember to associate it with request.scopes, request.user and
@@ -93,18 +121,36 @@ class SkeletonValidator(RequestValidator):
         # the authorization code. Don't forget to save both the
         # access_token and the refresh_token and set expiration for the
         # access_token to now + expires_in seconds.
-        pass
+
+        # may actually be more complicated than this...
+        # https://github.com/evonove/django-oauth-toolkit/blob/master/oauth2_provider/oauth2_validators.py#L307
+
+        scope = token['scope']
+        access_token_code = token['access_token']
+        refresh_token_code = token.get('refresh_token', None)
+
+        bt = BearerToken(constants.db)
+        bt.set(client_id=request.client,
+               user=request.user,
+               scopes=scope,
+               access_token=access_token_code,
+               refresh_token=refresh_token_code)
 
     def invalidate_authorization_code(self, client_id, code, request, *args, **kwargs):
         # Authorization codes are use once, invalidate it when a Bearer token
         # has been acquired.
-        pass
+        auth = AuthorizationCode(constants.db)
+        auth.remove(client_id, code)
+
 
     # Protected resource request
 
     def validate_bearer_token(self, token, scopes, request):
         # Remember to check expiration and scope membership
-        pass
+        # TODO: Remember to check expiration and scope membership
+        bt = BearerToken(constants.db)
+        db_token = bt.get_access(token)
+        return db_token and all([scope in db_token.scopes for scope in scopes])
 
     # Token refresh request
 
@@ -113,4 +159,7 @@ class SkeletonValidator(RequestValidator):
         # return its scopes, these will be passed on to the refreshed
         # access token if the client did not specify a scope during the
         # request.
-        pass
+        bt = BearerToken(constants.db)
+        db_token = bt.get_access(refresh_token)
+        scopes = db_token.scopes.split(",")
+        return scopes

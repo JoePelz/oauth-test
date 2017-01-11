@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS BearerToken
 ( client_id         CHAR(100) NOT NULL UNIQUE
 , user              INTEGER NOT NULL
 , scopes            TEXT
-, access_token      CHAR(100) NOT NULL
-, refresh_token     CHAR(100)
+, access_token      CHAR(100) NOT NULL UNIQUE
+, refresh_token     CHAR(100) UNIQUE
 , expiration_time   INTEGER DEFAULT ((strftime('%s','now')) + 3600)
 , CONSTRAINT pk_BT_ciu PRIMARY KEY (`client_id`, `user`)
 , CONSTRAINT fk_BT_client FOREIGN KEY (`client_id`) references `Client`(`client_id`)
@@ -33,11 +33,13 @@ CREATE TABLE IF NOT EXISTS BearerToken
 
 CREATE TABLE IF NOT EXISTS AuthorizationCode
 ( client_id         CHAR(100) UNIQUE
+, code              CHAR(100) NOT NULL
 , user              INTEGER NOT NULL
 , scopes            TEXT
-, code              CHAR(100)
+, state             TEXT
+, redirect_uris     TEXT
 , expiration_time   INTEGER DEFAULT (strftime('%s','now') + 600)
-, CONSTRAINT pk_AC_ciu PRIMARY KEY (`client_id`, `user`)
+, CONSTRAINT pk_AC_ciu PRIMARY KEY (`client_id`, `code`)
 , CONSTRAINT fk_AC_client FOREIGN KEY (`client_id`) references `Client`(`client_id`)
 , CONSTRAINT fk_AC_user FOREIGN KEY (`user`) references `Users`(`id`)
 );
