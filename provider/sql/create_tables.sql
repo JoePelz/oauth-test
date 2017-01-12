@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS AuthorizationCode
 , user              INTEGER NOT NULL
 , scopes            TEXT
 , state             TEXT
-, redirect_uris     TEXT
+, redirect_uri      TEXT
 , expiration_time   INTEGER DEFAULT (strftime('%s','now') + 600)
 , CONSTRAINT pk_AC_ciu PRIMARY KEY (`client_id`, `code`)
 , CONSTRAINT fk_AC_client FOREIGN KEY (`client_id`) references `Client`(`client_id`)

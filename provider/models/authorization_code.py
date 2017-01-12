@@ -8,7 +8,7 @@ class AuthorizationCode(object):
             'cid': client_id,
             'code': code
         }
-        num_deleted = self.db.delete(self.table, where="client_id=$cid AND code=$code", vars=qvars, limit=1)
+        num_deleted = self.db.delete(self.table, where="client_id=$cid AND code=$code", vars=qvars)
         return num_deleted
 
     def set(self, client_id, user, scopes, code, state, redirect_uri):

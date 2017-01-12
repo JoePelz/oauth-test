@@ -1,3 +1,4 @@
+import inspect
 import constants
 from oauthlib.oauth2 import RequestValidator
 from models.clients import Clients
@@ -6,13 +7,6 @@ from models.bearer_token import BearerToken
 
 
 class MyRequestValidator(RequestValidator):
-
-    def validate_client_id(self, client_id, request, *args, **kwargs):
-        clients = Clients(constants.db)
-        client = clients.get(client_id=client_id)
-        return client is not None
-
-class SkeletonValidator(RequestValidator):
     def __init__(self):
         self.clients = Clients(constants.db)
 
@@ -29,7 +23,7 @@ class SkeletonValidator(RequestValidator):
         # Is the client allowed to use the supplied redirect_uri? i.e. has
         # the client previously registered this EXACT redirect uri.
         client = self.clients.get(client_id)
-        uris = client.redurect_uris.split(",")
+        uris = client.redirect_uris.split(' ')
         return redirect_uri and redirect_uri in uris
 
     def get_default_redirect_uri(self, client_id, request, *args, **kwargs):
@@ -42,7 +36,8 @@ class SkeletonValidator(RequestValidator):
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
         # Is the client allowed to access the requested scopes?
         client = self.clients.get(client_id)
-        legal_scopes = client.scopes.split(",")
+        legal_scopes = client.scopes.split(' ')
+        print("{0}: {1} ({1.__class__})".format("scopes", scopes))
         return all([scope in legal_scopes for scope in scopes])
 
     def get_default_scopes(self, client_id, request, *args, **kwargs):
@@ -69,8 +64,8 @@ class SkeletonValidator(RequestValidator):
         auth = AuthorizationCode(constants.db)
         auth.set(client_id=request.client,
                  user=request.user,
-                 code=code,
-                 scopes=",".join(request.scopes),
+                 code=code_string,
+                 scopes=' '.join(request.scopes),
                  state=state,
                  redirect_uri=request.redirect_uri)
 
@@ -94,7 +89,7 @@ class SkeletonValidator(RequestValidator):
         # TODO: test if expiration time is passed
         # TODO: test if state (salt) matches
         if match:
-            request.scope = match.scopes.split(",")
+            request.scope = match.scopes.split(' ')
             request.user = match.user
             request.state = match.state
             return True
@@ -161,5 +156,26 @@ class SkeletonValidator(RequestValidator):
         # request.
         bt = BearerToken(constants.db)
         db_token = bt.get_access(refresh_token)
-        scopes = db_token.scopes.split(",")
+        scopes = db_token.scopes.split(' ')
         return scopes
+
+    def validate_refresh_token(self, refresh_token, client, request, *args, **kwargs):
+        raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
+
+    def get_id_token(self, token, token_handler, request):
+        raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
+
+    def revoke_token(self, token, token_type_hint, request, *args, **kwargs):
+        raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
+
+    def validate_user_match(self, id_token_hint, scopes, claims, request):
+        raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
+
+    def validate_silent_login(self, request):
+        raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
+
+    def validate_silent_authorization(self, request):
+        raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
+
+    def validate_user(self, username, password, client, request, *args, **kwargs):
+        raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))

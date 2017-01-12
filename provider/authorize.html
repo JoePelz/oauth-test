@@ -1,0 +1,16 @@
+$def with (client_id, scopes)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Authorization</title>
+</head>
+<body>
+<h1> Authorize access to $client_id </h1>
+<form method="POST" action="/authorize">
+  $for scope in scopes or []:
+    <input type="checkbox" name="scopes" value="$scope"/> $scope
+  <input type="submit" value="Authorize"/>
+</form>
+</body>
+</html>
