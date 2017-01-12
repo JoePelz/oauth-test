@@ -23,12 +23,24 @@ server = WebApplicationServer(validator)
 #    web.config._session = session
 #else:
 #    session = web.config._session
-web.config.debug = False
-session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
+
+# web.config.debug = False
+# session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
 
 # ====================================================
-# curl -H 'Accept: application/json' localhost:8080/ -d '{"a":"b"}' -H "Content-Type: application/json" -H "Authorization: Bearer 123abc"
+# curl -H 'Accept: application/json' localhost:8081/ -d '{"a":"b"}' -H "Content-Type: application/json" -H "Authorization: Bearer 123abc"
 # http://localhost:8081/authorize?client_id=0123456789abcdef&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fprivate&response_type=code&scope=base
+
+def report_init(page, protocol, webinput):
+    print(" {page} {protocol} ".format(page=page, protocol=protocol).center(50, '-'))
+    #print("SESSION ID: {0}".format(web.ctx.environ.get('HTTP_COOKIE', 'unknown')))
+    #print("SESSION KEYS: {0}".format(session.keys()))
+    #print("SESSION: {0}".format(dict(session)))
+    print("WEB INPUT: {0}".format(webinput))
+    print("-"*50)
+    print("\n")
+
+
 class Dummy(object):
     def GET(self):
         print("DUMMY GET".center(50, '='))
@@ -84,7 +96,8 @@ class Authorize(object):
             "acr_values": None
         :return:
         """
-        print("AUTHORIZE GET".center(50, '='))
+        data = web.input()
+        report_init("AUTHORIZE", "GET", data)
         uri = "{scheme}://{host}{port}{path}".format(
             scheme = web.ctx.env.get('wsgi.url_scheme', 'http'),
             host = web.ctx.env['SERVER_NAME'],
@@ -108,10 +121,11 @@ class Authorize(object):
             # NOTE: I need to remove "request" because it stores custom data structures
             # and fails to be properly pickled into the session storage
             credentials.pop("request", None)
-            session['oauth2_credentials'] = credentials
+            print(credentials)
+            # session['oauth2_credentials'] = credentials
 
             # You probably want to render a template instead.
-            return constants.render.authorize("0123456789abcdef", scopes)
+            return constants.render.authorize(scopes, credentials)
 
         # Errors that should be shown to the user on the provider website
         except errors.FatalClientError as e:
@@ -128,7 +142,8 @@ class Authorize(object):
         return "reached end of GET code"
 
     def POST(self):
-        print("AUTHORIZE POST".center(50, '='))
+        data = web.input()
+        report_init("AUTHORIZE", "POST", data)
         uri = "{scheme}://{host}{port}{path}".format(
             scheme = web.ctx.env.get('wsgi.url_scheme', 'http'),
             host = web.ctx.env['SERVER_NAME'],
@@ -143,16 +158,13 @@ class Authorize(object):
 
         # The scopes the user actually authorized, i.e. checkboxes
         # that were selected.
-        POST_data = web.input()
-        print("POST data: ")
-        pprint.pprint(POST_data)
-        scopes = POST_data.get('scopes')
+        scopes = data.get('scopes')
         if scopes:
             scopes = scopes.split(' ')
             print("Scopes: {0}".format(scopes))
         else:
-            print("No scopes recorded.")
             scopes = []
+            print("No scopes recorded.")
 
         # Extra credentials we need in the validator
         # credentials = {'user': request.user}
@@ -160,7 +172,8 @@ class Authorize(object):
         credentials = {'user': 'temp'}
 
         # The previously stored (in authorization GET view) credentials
-        credentials.update(session.get('oauth2_credentials', {}))
+        # probably contains: 'state', 'redirect_uri', 'response_type', 'client_id'
+        credentials.update(data)
 
         try:
             headers, body, status = self._authorization_endpoint.create_authorization_response(
@@ -179,11 +192,13 @@ class Token(object):
         self._authorization_endpoint = server
 
     def GET(self):
-        print("TOKEN GET".center(50, '='))
+        data = web.input()
+        report_init("TOKEN", "GET", data)
         return constants.render.dummy()
 
     def POST(self):
-        print("TOKEN POST".center(50, '='))
+        data = web.input()
+        report_init("TOKEN", "POST", data)
         return constants.render.dummy()
 
 

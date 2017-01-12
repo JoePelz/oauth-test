@@ -1,4 +1,4 @@
-$def with (client_id, scopes)
+$def with (scopes, credentials)
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,10 +6,12 @@ $def with (client_id, scopes)
   <title>Authorization</title>
 </head>
 <body>
-<h1> Authorize access to $client_id </h1>
+<h1> Authorize access</h1>
 <form method="POST" action="/authorize">
   $for scope in scopes or []:
     <input type="checkbox" name="scopes" value="$scope"/> $scope
+  $for k, v in credentials.iteritems():
+    <input type="hidden" name="$k" value="$v"/>
   <input type="submit" value="Authorize"/>
 </form>
 </body>
