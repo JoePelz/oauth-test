@@ -165,7 +165,7 @@ class Authorize(object):
         try:
             headers, body, status = self._authorization_endpoint.create_authorization_response(
                 uri, http_method, body, headers, scopes, credentials)
-            if headers.keys() == ['Location'] and status == 303:
+            if headers.keys() == ['Location'] and status in (302, 303):
                 print("Redirecting to {0}".format(headers['Location']))
                 raise web.seeother(headers['Location'], absolute=True)
             else:
