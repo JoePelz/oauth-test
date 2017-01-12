@@ -1,36 +1,31 @@
-import json
-import web
+import os
 import urllib
 import urllib2
 import base64
-import os
-
-urls = (
-    '/', 'Public',  # Omit the overview page and go straight to map (no content in overview anyway)
-    '/public', 'Public',
-    '/private', 'Private',
-    '/login', 'Login',
-    '/logout', 'Logout',
-)
-
-# This is the URL we'll send the user to first to get their authorization
-authorizeURL = 'http://localhost:8081/authorize'
-
-# This is the endpoint our server will request an access token from
-tokenURL = 'http://localhost:8081/token'
-
-
-app = web.application(urls, globals())
-
-if web.config.get('_session') is None:
-    session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
-    web.config._session = session
-else:
-    session = web.config._session
-
-render = web.template.render('./')
+import web
+web.config.debug = False
 
 # ====================================================
+
+
+def parse_sql_file(path):
+    with open(path, 'r') as f:
+        lines = f.readlines()
+    # remove comment lines
+    lines = [i for i in lines if not i.startswith("--")]
+    # join into one long string
+    script = " ".join(lines)
+    # split string into a list of commands
+    commands = script.split(";")
+    # ignore empty statements (like trailing newlines)
+    commands = filter(lambda x: bool(x.strip()), commands)
+    return commands
+
+
+def exec_sql(connection, path):
+    commands = parse_sql_file(path)
+    for command in commands:
+        connection.query(command)
 
 
 def getRequest(url, headers=None, args=None):
@@ -83,20 +78,42 @@ def postRequest(url, headers=None, args=None):
 
     return response
 
+def report_init(page, protocol, session, webinput):
+    print(" {page} {protocol} ".format(page=page, protocol=protocol).center(50, '-'))
+    print("SESSION ID: {0}".format(web.ctx.environ.get('HTTP_COOKIE', 'unknown')))
+    print("SESSION KEYS: {0}".format(session.keys()))
+    print("SESSION: {0}".format(dict(session)))
+    print("WEB INPUT: {0}".format(webinput))
+    print("-"*50)
+    print("\n")
 
 class Public(object):
+    def __init__(self):
+        if "counter" not in session:
+            session['counter'] = 0
+        else:
+            session['counter'] += 1
+
     def GET(self):
-        print("PUBLIC GET".center(50, '='))
-        GET_data = web.input()
+        data = web.input()
+        report_init("PUBLIC", "GET", session, data)
+
         return render.public_page()
 
     def POST(self):
-        print("PUBLIC POST".center(50, '='))
-        GET_data = web.input()
+        data = web.input()
+        report_init("PUBLIC", "POST", session, data)
+
         return render.public_page()
 
 
 class Private(object):
+    def __init__(self):
+        if "counter" not in session:
+            session['counter'] = 0
+        else:
+            session['counter'] += 1
+
     def retrieve_key(self, GET_data):
         # Verify the state matches our stored state
         if 'state' not in GET_data or GET_data['state'] != session['state']:
@@ -105,40 +122,47 @@ class Private(object):
 
         # Exchange the auth code for a token
         params = {
-            'client_id': "12345",
-            'client_secret': 'abcde',
+            'client_id': "0123456789abcdef",
             'redirect_uri': 'http://localhost:8080/private',
             'state': session['state'],
             'code': GET_data['code']
         }
         token = postRequest(tokenURL, args=params)
         print("token received:\n{0}".format(token))
-        session['access_token'] = token
+        session['bearer_token'] = token
 
         raise web.seeother("/private")
 
     def GET(self):
-        print("PRIVATE GET".center(50, '='))
-        GET_data = web.input()
+        data = web.input()
+        report_init("PRIVATE", "GET", session, data)
 
-        if 'code' in GET_data:
-            self.retrieve_key(GET_data)
+        if 'code' in data:
+            self.retrieve_key(data)
 
-        if 'access_token' in session:
+        if 'bearer_token' in session:
             return render.private_page()
         else:
-            print("redirecting to /public".format(authorizeURL, qstring))
+            print("redirecting to /public")
             raise web.seeother("/public")
 
     def POST(self):
-        print("PRIVATE POST".center(50, '='))
-        GET_data = web.input()
+        data = web.input()
+        report_init("PRIVATE", "POST", session, data)
+        print("redirecting back to public.")
+        raise web.seeother("/public")
 
 
 class Login(object):
+    def __init__(self):
+        if "counter" not in session:
+            session['counter'] = 0
+        else:
+            session['counter'] += 1
+
     def GET(self):
-        print("LOGIN GET".center(50, '='))
-        GET_data = web.input()
+        data = web.input()
+        report_init("LOGIN", "GET", session, data)
 
         # Generate a random hash and store in the session for security
         seq = os.urandom(48)
@@ -147,9 +171,10 @@ class Login(object):
         session.pop('access_token', None)
 
         params = {
-            'client_id': "12345",
+            'client_id': "0123456789abcdef",
             'redirect_uri': 'http://localhost:8080/private',
-            'scope': 'user',
+            'response_type': 'code',
+            'scope': 'base',
             'state': session['state']
         }
 
@@ -159,23 +184,57 @@ class Login(object):
         raise web.seeother("{0}?{1}".format(authorizeURL, qstring))
 
     def POST(self):
-        print("LOGIN POST".center(50, '='))
+        data = web.input()
+        report_init("LOGIN", "POST", session, data)
         GET_data = web.input()
 
 
 class Logout(object):
     def GET(self):
-        print("LOGOUT GET".center(50, '='))
+        data = web.input()
+        report_init("LOGOUT", "GET", session, data)
         session.kill()
         raise web.seeother("/public")
 
     def POST(self):
-        print("LOGOUT POST".center(50, '='))
-        self.GET()
+        data = web.input()
+        report_init("LOGOUT", "POST", session, data)
+        session.kill()
         raise web.seeother("/public")
 
 
 # Manage routing from here. Regex matches URL and chooses class by name
+urls = (
+    '/', 'Public',  # Omit the overview page and go straight to map (no content in overview anyway)
+    '/public', 'Public',
+    '/private', 'Private',
+    '/login', 'Login',
+    '/logout', 'Logout',
+)
+
+BASE_PATH = "."
+# This is the URL we'll send the user to first to get their authorization
+authorizeURL = 'http://localhost:8081/authorize'
+
+# This is the endpoint our server will request an access token from
+tokenURL = 'http://localhost:8081/token'
+
+app = web.application(urls, globals())
+
+web.config.session_parameters['cookie_path'] = "/"
+
+# set up database
+db_path = os.path.join(BASE_PATH, "data", "dev.db")
+db = web.database(dbn='sqlite', db=db_path)
+db.query("PRAGMA foreign_keys = ON;")
+exec_sql(db, os.path.join(BASE_PATH, "sql", "session_table.sql"))
+
+# set up session
+store = web.session.DBStore(db, 'sessions')
+session = web.session.Session(app, store)
+session['dummy'] = '123'
+
+render = web.template.render('./')
 
 
 if __name__ == "__main__":

@@ -18,15 +18,17 @@ app = web.application(constants.urls, globals())
 validator = MyRequestValidator()
 server = WebApplicationServer(validator)
 
-if web.config.get('_session') is None:
-    session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
-    web.config._session = session
-else:
-    session = web.config._session
+#if web.config.get('_session') is None:
+#    session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
+#    web.config._session = session
+#else:
+#    session = web.config._session
+web.config.debug = False
+session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
 
 # ====================================================
 # curl -H 'Accept: application/json' localhost:8080/ -d '{"a":"b"}' -H "Content-Type: application/json" -H "Authorization: Bearer 123abc"
-# http://localhost:8080/authorize?client_id=0123456789abcdef&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fprivate&response_type=code&scope=base
+# http://localhost:8081/authorize?client_id=0123456789abcdef&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fprivate&response_type=code&scope=base
 class Dummy(object):
     def GET(self):
         print("DUMMY GET".center(50, '='))
@@ -163,7 +165,11 @@ class Authorize(object):
         try:
             headers, body, status = self._authorization_endpoint.create_authorization_response(
                 uri, http_method, body, headers, scopes, credentials)
-            return response_from_return(headers, body, status)
+            if headers.keys() == ['Location'] and status == 303:
+                print("Redirecting to {0}".format(headers['Location']))
+                raise web.seeother(headers['Location'], absolute=True)
+            else:
+                return response_from_return(headers, body, status)
 
         except errors.FatalClientError as e:
             return response_from_error(e)
@@ -182,6 +188,11 @@ class Token(object):
 
 
 def response_from_return(headers, body, status):
+    print("doing response_from_return(...)")
+    print("  headers: {0}".format(headers))
+    print("  body: {0}".format(body))
+    print("  status: {0}".format(status))
+    # raise web.seeother("http://www.google.ca")
     raise web.HTTPError(status, headers, body)
 
 def response_from_error(e):
