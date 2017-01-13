@@ -35,14 +35,20 @@ class MyRequestValidator(RequestValidator):
 
     def validate_scopes(self, client_id, scopes, client, request, *args, **kwargs):
         # Is the client allowed to access the requested scopes?
+        print("validate_scopes")
         client = self.clients.get(client_id)
-        legal_scopes = client.scopes.split(' ')
-        print("{0}: {1} ({1.__class__})".format("scopes", scopes))
-        return all([scope in legal_scopes for scope in scopes])
+        print("client ({0}) is a {1}".format(client, type(client)))
+        print("client.scopes ({0}) is a {1}".format(client.scopes, type(client.scopes)))
+        client_scopes = client.scopes.split(' ')
+        print("client_scopes ({0}) is a {1}".format(client_scopes, type(client_scopes)))
+        print("scopes ({0}) is a {1}".format(scopes, type(scopes)))
+        print("validation: {0}".format([requested_scope in client_scopes for requested_scope in scopes]))
+        return all([requested_scope in client_scopes for requested_scope in scopes])
 
     def get_default_scopes(self, client_id, request, *args, **kwargs):
         # Scopes a client will authorize for if none are supplied in the
         # authorization request.
+        print("get_default_scopes")
         client = self.clients.get(client_id)
         return client.default_scopes
 
@@ -59,6 +65,7 @@ class MyRequestValidator(RequestValidator):
         # Remember to associate it with request.scopes, request.redirect_uri
         # request.client, request.state and request.user (the last is passed in
         # post_authorization credentials, i.e. { 'user': request.user}.
+        print('save_authorization_code')
         code_string = code['code']
         state = code.get('state', '')
         auth = AuthorizationCode(constants.db)
@@ -84,6 +91,7 @@ class MyRequestValidator(RequestValidator):
     def validate_code(self, client_id, code, client, request, *args, **kwargs):
         # Validate the code belongs to the client. Add associated scopes,
         # state and user to request.scopes and request.user.
+        print("validate_code")
         auth = AuthorizationCode(constants.db)
         match = auth.match(client_id=client, code=code)
         # TODO: test if expiration time is passed
@@ -143,6 +151,7 @@ class MyRequestValidator(RequestValidator):
     def validate_bearer_token(self, token, scopes, request):
         # Remember to check expiration and scope membership
         # TODO: Remember to check expiration and scope membership
+        print("validate_bearer_token")
         bt = BearerToken(constants.db)
         db_token = bt.get_access(token)
         return db_token and all([scope in db_token.scopes for scope in scopes])
@@ -154,6 +163,7 @@ class MyRequestValidator(RequestValidator):
         # return its scopes, these will be passed on to the refreshed
         # access token if the client did not specify a scope during the
         # request.
+        print("get_original_scopes")
         bt = BearerToken(constants.db)
         db_token = bt.get_access(refresh_token)
         scopes = db_token.scopes.split(' ')
@@ -169,6 +179,7 @@ class MyRequestValidator(RequestValidator):
         raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
 
     def validate_user_match(self, id_token_hint, scopes, claims, request):
+        print("validate_user_match")
         raise NotImplemented("{0} not implemented".format(inspect.currentframe().f_code.co_name))
 
     def validate_silent_login(self, request):

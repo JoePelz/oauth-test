@@ -142,7 +142,8 @@ class Authorize(object):
         return "reached end of GET code"
 
     def POST(self):
-        data = web.input()
+        test_scopes = []
+        data = web.input(scopes=test_scopes)
         report_init("AUTHORIZE", "POST", data)
         uri = "{scheme}://{host}{port}{path}".format(
             scheme = web.ctx.env.get('wsgi.url_scheme', 'http'),
@@ -158,13 +159,9 @@ class Authorize(object):
 
         # The scopes the user actually authorized, i.e. checkboxes
         # that were selected.
-        scopes = data.get('scopes')
-        if scopes:
-            scopes = scopes.split(' ')
-            print("Scopes: {0}".format(scopes))
-        else:
-            scopes = []
-            print("No scopes recorded.")
+        scopes = data.get('scopes', [])
+
+        print("Scopes: {0}".format(repr(scopes)))
 
         # Extra credentials we need in the validator
         # credentials = {'user': request.user}
@@ -176,8 +173,10 @@ class Authorize(object):
         credentials.update(data)
 
         try:
+            print("creating authorization response\n")
             headers, body, status = self._authorization_endpoint.create_authorization_response(
                 uri, http_method, body, headers, scopes, credentials)
+            print("\nauthorization response created")
             if headers.keys() == ['Location'] and status in (302, 303):
                 print("Redirecting to {0}".format(headers['Location']))
                 raise web.seeother(headers['Location'], absolute=True)
