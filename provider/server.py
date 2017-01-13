@@ -12,6 +12,7 @@ import hashlib
 import binascii
 import hmac
 from models.users import Users
+import time
 
 # enable logging, while under development
 log = logging.getLogger('oauthlib')
@@ -42,20 +43,24 @@ def report_init(page, protocol, webinput):
 class Home(object):
 
     def is_remembered(self):
+        print("attempting to remember user")
         cookie = web.cookies().get('rememberme')
         if not cookie:
+            print("No cookie found.")
             return False
         try:
             account, token, _hash = cookie.split(":")
             users = Users(common.db)
             user = users.get_by_id(account)
             if user:
+                print("memory of user found")
                 saved_token = user.remember_token
                 saved_key = user.secret_key
                 dk = hashlib.pbkdf2_hmac('sha256', "{0}:{1}".format(account, saved_token), saved_key, 100000)
                 ascii_hash = binascii.hexlify(dk)
                 matches = hmac.compare_digest(cookie, "{0}:{1}:{2}".format(account, saved_token, ascii_hash))
                 if matches:
+                    print("user codes match! User is remembered")
                     return user
         except:
             traceback.print_exc()
@@ -72,11 +77,12 @@ class Home(object):
         is_logged_in = self.is_logged_in()
 
         # if not logged in and they had checked "stay logged in", automatically log in the user.
-        user = self.is_remembered()
-        if user:
-            session['logged_in'] = True
-            session['name'] = user.name
-            is_logged_in = True
+        if not is_logged_in:
+            user = self.is_remembered()
+            if user:
+                session['logged_in'] = True
+                session['name'] = user.name
+                is_logged_in = True
 
         # if logged in, get user's name.
         if is_logged_in:
@@ -101,7 +107,7 @@ class Login(object):
         duration = 31536000  # 60*60*24*365 # 1 year
         # TODO: set secure=True to require HTTPS
         # TODO: does the domain or path need to be set?
-        web.setcookie('rememberme', cookie_text, expires=duration)
+        web.setcookie('rememberme', cookie_text, expires=duration, domain="localhost", path="/")
         # setcookie(name, value, expires='', domain=None, secure=False, httponly=False, path=None):
 
     def get_user(self, data):
@@ -124,7 +130,7 @@ class Login(object):
         if user:
             session['name'] = user['name']
             session['logged_in'] = True
-            if 'stay_logged_in' in session:
+            if data.get('remember', " ") == "True":
                 self.remember_me(user['id'])
         web.seeother("/")
 

@@ -2,11 +2,11 @@ CREATE TABLE IF NOT EXISTS Users
 ( id                INTEGER PRIMARY KEY
 , email             TEXT UNIQUE
 , password          CHAR(60) NOT NULL
-, secret_key        CHAR(32) NOT NULL
-, remember_token    CHAR(32) NOT NULL
+, secret_key        CHAR(32)
+, remember_token    CHAR(32)
 , name              TEXT
 , memo              TEXT
-, last_access       INTEGER DEFAULT (strftime('now'))
+, last_access       INTEGER DEFAULT (strftime('%s', 'now'))
 );
 
 -- subscription type could be a foreign key to a subtable with specific billing/access information

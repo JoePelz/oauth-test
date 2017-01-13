@@ -1,8 +1,7 @@
 import time
-import os
-import base64
-import math
 import bcrypt
+
+# users.add("one@two.com", "tunafish", name="Adrie", memo="secret text")
 
 
 class Users(object):
@@ -16,11 +15,11 @@ class Users(object):
         :param email:  The email to identify a user
         :return: None
         """
-        now = int(time.time())
         qvars = {
             "email": email
         }
-        self.db.update(self.table, "email=$email", vars=qvars, last_access=now, limit=1)
+        now = int(time.time())
+        self.db.update(self.table, "email=$email", vars=qvars, last_access=now)
 
     def get_by_id(self, account):
         qvars = {
@@ -42,8 +41,9 @@ class Users(object):
         rows = self.db.select(self.table, where="email=$email", vars=qvars, limit=1)
         user = rows.first()
         if user:
-            hashed_password = user.password
-            password_matches = bcrypt.hashpw(password, hashed_password) == hashed_password
+            hashed_password = user.password.encode(encoding='utf-8')
+            ascii_password = password.encode(encoding='utf-8')
+            password_matches = bcrypt.hashpw(ascii_password, hashed_password) == hashed_password
             if password_matches:
                 self.update_access_time(email)
                 return user
