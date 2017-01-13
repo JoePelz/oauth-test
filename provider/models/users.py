@@ -3,13 +3,14 @@ class Users(object):
         self.db = db
         self.table = "Users"
 
-    def get(self, email, password):
+    def get(self, account, email, password):
         """
         :param email: The user email to search for
         :param password: The use password that corresponds to the email above
         :return: All user details if a match is found, else None.
         """
         qvars = {
+            "account": account,
             "email": email,
             "password": password
         }

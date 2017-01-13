@@ -8,6 +8,7 @@ import oauthlib.oauth2.rfc6749.errors as errors
 
 import logging
 import sys
+from models.users import Users
 log = logging.getLogger('oauthlib')
 log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
@@ -24,8 +25,8 @@ server = WebApplicationServer(validator)
 #else:
 #    session = web.config._session
 
-# web.config.debug = False
-# session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
+web.config.debug = False
+session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
 
 # ====================================================
 # curl -H 'Accept: application/json' localhost:8081/ -d '{"a":"b"}' -H "Content-Type: application/json" -H "Authorization: Bearer 123abc"
@@ -33,24 +34,75 @@ server = WebApplicationServer(validator)
 
 def report_init(page, protocol, webinput):
     print(" {page} {protocol} ".format(page=page, protocol=protocol).center(50, '-'))
-    #print("SESSION ID: {0}".format(web.ctx.environ.get('HTTP_COOKIE', 'unknown')))
-    #print("SESSION KEYS: {0}".format(session.keys()))
-    #print("SESSION: {0}".format(dict(session)))
+    print("SESSION ID: {0}".format(web.ctx.environ.get('HTTP_COOKIE', 'unknown')))
+    print("SESSION KEYS: {0}".format(session.keys()))
+    print("SESSION: {0}".format(dict(session)))
     print("WEB INPUT: {0}".format(webinput))
     print("-"*50)
-    print("\n")
+    print("")
 
 
-class Dummy(object):
+class Home(object):
+    def is_logged_in(self):
+        return "logged_in" in session and session['logged_in'] == True and "name" in session
+
     def GET(self):
-        print("DUMMY GET".center(50, '='))
-        # GET_data = web.input()
-        return constants.render.dummy()
+        data = web.input()
+        report_init("HOME", "GET", data)
+
+        # check if the user is currently logged in
+        is_logged_in = self.is_logged_in()
+
+        # if not logged in and they had checked "stay logged in", automatically log in the user.
+        # TODO:
+        if False:
+            session['logged_in'] = True
+            session['name'] = "Bilbo"
+            is_logged_in = True
+
+        # if logged in, get user's name.
+        if is_logged_in:
+            name = session['name']
+        else:
+            name = ""
+
+        return constants.render.home(is_logged_in, name)
+
+
+class Login(object):
+    def get_user(self, data):
+        try:
+            account = data['account']
+            email = data['email']
+            password = data['password']
+        except KeyError:
+            return None
+
+        users = Users(constants.db)
+        user = users.get(account, email, password)
+        return user
 
     def POST(self):
-        print("DUMMY POST".center(50, '='))
-        # GET_data = web.input()
-        return constants.render.dummy()
+        data = web.input()
+        report_init("LOGIN", "POST", data)
+
+        user = self.get_user(data)
+        if user:
+            session['name'] = user['name']
+            session['logged_in'] = True
+        web.seeother("/")
+
+
+class Logout(object):
+    def GET(self):
+        data = web.input()
+        report_init("LOGOUT", "GET", data)
+        session.kill()
+        web.seeother("/")
+
+    def POST(self):
+        print(" LOGOUT POST ".center(50, '-'))
+        self.GET()
 
 class Authorize(object):
     def __init__(self):
@@ -210,7 +262,7 @@ def response_from_return(headers, body, status):
     raise web.HTTPError(status, headers, body)
 
 def response_from_error(e):
-    raise web.BadRequest('Evil client is unable to send a proper request. Error is: ' + e.description)
+    raise web.BadRequest('<h1>Bad Request</h1><p>Error is: {0}</p>'.format(e.description))
 
 
 if __name__ == "__main__":

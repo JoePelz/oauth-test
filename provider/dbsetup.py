@@ -24,16 +24,16 @@ def exec_sql(connection, path):
 
 def create_db(base_path):
     # make sure folder exists
-    if not os.path.exists(os.path.join(base_path, *constants.DBPATH)):
-        os.makedirs(os.path.join(base_path, *constants.DBPATH))
+    db_path = os.path.join(base_path, *constants.DBPATH)
+    if not os.path.exists(db_path):
+        os.makedirs(db_path)
     # make sure db exists
-    fullpath = os.path.join(base_path, *constants.DBPATH)
-    fullpath = os.path.join(fullpath, constants.DBFILENAME)
-    if not os.path.exists(fullpath):
-        f = open(fullpath, 'a')
+    full_path = os.path.join(db_path, constants.DBFILENAME)
+    if not os.path.exists(full_path):
+        f = open(full_path, 'a')
         f.close()
 
 
-def dbsetup(db, base_path):
+def db_setup(db, base_path):
     create_db(base_path)
     exec_sql(db, os.path.join(base_path, "sql", "create_tables.sql"))

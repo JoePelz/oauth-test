@@ -174,7 +174,7 @@ class Login(object):
             'client_id': "0123456789abcdef",
             'redirect_uri': 'http://localhost:8080/private',
             'response_type': 'code',
-            'scope': 'base admin',
+            'scope': 'base',
             'state': session['state']
         }
 

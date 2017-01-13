@@ -1,0 +1,23 @@
+$def with (is_logged_in, name)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Home page</title>
+</head>
+<body>
+$if is_logged_in:
+  <h1>You are logged in as $name.title().</h1>
+  <a href="/logout">Logout</a>
+$else:
+  <h1>You are not logged in.</h1>
+  <div class="login">
+    <form method="POST" action="/login">
+      <p><input id="account_id" type="text" name="account" placeholder="account number"><label for="account_id">Account number</label></p>
+      <p><input id="email" type="text" name="email" placeholder="email address"><label for="email">Email address</label></p>
+      <p><input id="password_field" type="password" name="password", placeholder="password"><label for="password_field">Password</label></p>
+      <p><input type="submit" value="Log In"/></p>
+    </form>
+  </div>
+</body>
+</html>

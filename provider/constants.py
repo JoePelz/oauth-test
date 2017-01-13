@@ -9,7 +9,9 @@ DBFILENAME = 'dev.db'
 sys.path.append(BASE_PATH)
 
 urls = (
-    '/', 'Dummy',  # Omit the overview page and go straight to map (no content in overview anyway)
+    '/', 'Home',
+    '/login', 'Login',
+    '/logout', 'Logout',
     '/authorize', 'Authorize',
     '/token', 'Token',
 )
@@ -19,7 +21,7 @@ db_path = os.path.join(db_path, DBFILENAME)
 db = web.database(dbn='sqlite', db=db_path)
 db.query("PRAGMA foreign_keys = ON;")
 
-render = web.template.render('./')
+render = web.template.render(os.path.join(BASE_PATH, 'templates'))
 
 #if web.config.get('_session') is None:
 #    session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
