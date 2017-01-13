@@ -3,18 +3,18 @@ class AuthorizationCode(object):
         self.db = db
         self.table = "AuthorizationCode"
 
-    def remove(self, client_id, code):
+    def remove(self, application_id, code):
         qvars = {
-            'cid': client_id,
+            'aid': application_id,
             'code': code
         }
-        num_deleted = self.db.delete(self.table, where="client_id=$cid AND code=$code", vars=qvars)
+        num_deleted = self.db.delete(self.table, where="app_id=$aid AND code=$code", vars=qvars)
         return num_deleted
 
-    def set(self, client_id, user, scopes, code, state, redirect_uri):
-        self.remove(client_id, code)
+    def set(self, application_id, user, scopes, code, state, redirect_uri):
+        self.remove(application_id, code)
         self.db.insert(self.table,
-                       client_id=client_id,
+                       app_id=application_id,
                        user=user,
                        scopes=scopes,
                        code=code,

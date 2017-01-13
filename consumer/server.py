@@ -232,7 +232,6 @@ exec_sql(db, os.path.join(BASE_PATH, "sql", "session_table.sql"))
 # set up session
 store = web.session.DBStore(db, 'sessions')
 session = web.session.Session(app, store)
-session['dummy'] = '123'
 
 render = web.template.render('./')
 

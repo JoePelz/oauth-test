@@ -1,32 +1,29 @@
 import traceback
-import pprint
 import web
+web.config.debug = False
 import constants
 from request_validator import MyRequestValidator
 from oauthlib.oauth2 import WebApplicationServer
 import oauthlib.oauth2.rfc6749.errors as errors
-
+import common
 import logging
 import sys
+import hashlib
+import binascii
+import hmac
 from models.users import Users
+
+# enable logging, while under development
 log = logging.getLogger('oauthlib')
 log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
 
-
 app = web.application(constants.urls, globals())
+session = web.session.Session(app, common.session_store)
 
 validator = MyRequestValidator()
-server = WebApplicationServer(validator)
+oauth_server = WebApplicationServer(validator)
 
-#if web.config.get('_session') is None:
-#    session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
-#    web.config._session = session
-#else:
-#    session = web.config._session
-
-web.config.debug = False
-session = web.session.Session(app, web.session.DiskStore('sessions'), {'count': 0})
 
 # ====================================================
 # curl -H 'Accept: application/json' localhost:8081/ -d '{"a":"b"}' -H "Content-Type: application/json" -H "Authorization: Bearer 123abc"
@@ -43,8 +40,29 @@ def report_init(page, protocol, webinput):
 
 
 class Home(object):
+
+    def is_remembered(self):
+        cookie = web.cookies().get('rememberme')
+        if not cookie:
+            return False
+        try:
+            account, token, _hash = cookie.split(":")
+            users = Users(common.db)
+            user = users.get_by_id(account)
+            if user:
+                saved_token = user.remember_token
+                saved_key = user.secret_key
+                dk = hashlib.pbkdf2_hmac('sha256', "{0}:{1}".format(account, saved_token), saved_key, 100000)
+                ascii_hash = binascii.hexlify(dk)
+                matches = hmac.compare_digest(cookie, "{0}:{1}:{2}".format(account, saved_token, ascii_hash))
+                if matches:
+                    return user
+        except:
+            traceback.print_exc()
+        return False
+
     def is_logged_in(self):
-        return "logged_in" in session and session['logged_in'] == True and "name" in session
+        return "logged_in" in session and session['logged_in'] is True and "name" in session
 
     def GET(self):
         data = web.input()
@@ -54,10 +72,10 @@ class Home(object):
         is_logged_in = self.is_logged_in()
 
         # if not logged in and they had checked "stay logged in", automatically log in the user.
-        # TODO:
-        if False:
+        user = self.is_remembered()
+        if user:
             session['logged_in'] = True
-            session['name'] = "Bilbo"
+            session['name'] = user.name
             is_logged_in = True
 
         # if logged in, get user's name.
@@ -66,10 +84,26 @@ class Home(object):
         else:
             name = ""
 
-        return constants.render.home(is_logged_in, name)
+        return common.render.home(is_logged_in, name)
 
 
 class Login(object):
+
+    def remember_me(self, account_id):
+        print("Saving, for remembering later.")
+        token = common.generate_salt(32)
+        secret_key = common.generate_salt(32)
+        self.users.storeRememberToken(account_id, token, secret_key)
+        cookie_text = "{0}:{1}".format(account_id, token)
+        dk = hashlib.pbkdf2_hmac('sha256', cookie_text, secret_key, 100000)
+        ascii_hash = binascii.hexlify(dk)
+        cookie_text = "{0}:{1}".format(cookie_text, ascii_hash)
+        duration = 31536000  # 60*60*24*365 # 1 year
+        # TODO: set secure=True to require HTTPS
+        # TODO: does the domain or path need to be set?
+        web.setcookie('rememberme', cookie_text, expires=duration)
+        # setcookie(name, value, expires='', domain=None, secure=False, httponly=False, path=None):
+
     def get_user(self, data):
         try:
             account = data['account']
@@ -78,8 +112,8 @@ class Login(object):
         except KeyError:
             return None
 
-        users = Users(constants.db)
-        user = users.get(account, email, password)
+        self.users = Users(common.db)
+        user = self.users.get(email, password)
         return user
 
     def POST(self):
@@ -90,6 +124,8 @@ class Login(object):
         if user:
             session['name'] = user['name']
             session['logged_in'] = True
+            if 'stay_logged_in' in session:
+                self.remember_me(user['id'])
         web.seeother("/")
 
 
@@ -97,6 +133,7 @@ class Logout(object):
     def GET(self):
         data = web.input()
         report_init("LOGOUT", "GET", data)
+        web.setcookie('rememberme', "", expires=-1)
         session.kill()
         web.seeother("/")
 
@@ -104,10 +141,11 @@ class Logout(object):
         print(" LOGOUT POST ".center(50, '-'))
         self.GET()
 
+
 class Authorize(object):
     def __init__(self):
         print("assigning server")
-        self._authorization_endpoint = server
+        self._authorization_endpoint = oauth_server
         print("finished init")
 
     def GET(self):
@@ -151,17 +189,16 @@ class Authorize(object):
         data = web.input()
         report_init("AUTHORIZE", "GET", data)
         uri = "{scheme}://{host}{port}{path}".format(
-            scheme = web.ctx.env.get('wsgi.url_scheme', 'http'),
-            host = web.ctx.env['SERVER_NAME'],
-            port = ':{0}'.format(web.ctx.env['SERVER_PORT']),
-            path = web.ctx.env['REQUEST_URI']
+            scheme=web.ctx.env.get('wsgi.url_scheme', 'http'),
+            host=web.ctx.env['SERVER_NAME'],
+            port=':{0}'.format(web.ctx.env['SERVER_PORT']),
+            path=web.ctx.env['REQUEST_URI']
         )
         http_method = web.ctx.environ["REQUEST_METHOD"]
         body = web.ctx.get('data', '')
         headers = web.ctx.env.copy()
         headers.pop("wsgi.errors", None)
         headers.pop("wsgi.input", None)
-
 
         try:
             scopes, credentials = self._authorization_endpoint.validate_authorization_request(
@@ -177,14 +214,14 @@ class Authorize(object):
             # session['oauth2_credentials'] = credentials
 
             # You probably want to render a template instead.
-            return constants.render.authorize(scopes, credentials)
+            return common.render.authorize(scopes, credentials)
 
         # Errors that should be shown to the user on the provider website
         except errors.FatalClientError as e:
             return response_from_error(e)
 
         # Errors embedded in the redirect URI back to the client
-        #except errors.OAuth2Error as e:
+        # except errors.OAuth2Error as e:
         #    return HttpResponseRedirect(e.in_uri(e.redirect_uri))
 
         # Something else went wrong.
@@ -198,10 +235,10 @@ class Authorize(object):
         data = web.input(scopes=test_scopes)
         report_init("AUTHORIZE", "POST", data)
         uri = "{scheme}://{host}{port}{path}".format(
-            scheme = web.ctx.env.get('wsgi.url_scheme', 'http'),
-            host = web.ctx.env['SERVER_NAME'],
-            port = ':{0}'.format(web.ctx.env['SERVER_PORT']),
-            path = web.ctx.env['REQUEST_URI']
+            scheme=web.ctx.env.get('wsgi.url_scheme', 'http'),
+            host=web.ctx.env['SERVER_NAME'],
+            port=':{0}'.format(web.ctx.env['SERVER_PORT']),
+            path=web.ctx.env['REQUEST_URI']
         )
         http_method = web.ctx.environ["REQUEST_METHOD"]
         body = web.ctx.get('data', '')
@@ -238,19 +275,20 @@ class Authorize(object):
         except errors.FatalClientError as e:
             return response_from_error(e)
 
+
 class Token(object):
     def __init__(self):
-        self._authorization_endpoint = server
+        self._authorization_endpoint = oauth_server
 
     def GET(self):
         data = web.input()
         report_init("TOKEN", "GET", data)
-        return constants.render.dummy()
+        return common.render.dummy()
 
     def POST(self):
         data = web.input()
         report_init("TOKEN", "POST", data)
-        return constants.render.dummy()
+        return common.render.dummy()
 
 
 def response_from_return(headers, body, status):
@@ -260,6 +298,7 @@ def response_from_return(headers, body, status):
     print("  status: {0}".format(status))
     # raise web.seeother("http://www.google.ca")
     raise web.HTTPError(status, headers, body)
+
 
 def response_from_error(e):
     raise web.BadRequest('<h1>Bad Request</h1><p>Error is: {0}</p>'.format(e.description))

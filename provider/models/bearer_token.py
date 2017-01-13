@@ -3,18 +3,18 @@ class BearerToken(object):
         self.db = db
         self.table = "BearerToken"
 
-    def remove(self, client_id, user):
+    def remove(self, application_id, user):
         qvars = {
-            'cid': client_id,
+            'aid': application_id,
             'uid': user
         }
-        num_deleted = self.db.delete(self.table, where="client_id=$cid AND user=$uid", vars=qvars, limit=1)
+        num_deleted = self.db.delete(self.table, where="app_id=$aid AND user=$uid", vars=qvars, limit=1)
         return num_deleted
 
-    def set(self, client_id, user, scopes, access_token, refresh_token):
-        self.remove(client_id, user)
+    def set(self, application_id, user, scopes, access_token, refresh_token):
+        self.remove(application_id, user)
         self.db.insert(self.table,
-                       client_id=client_id,
+                       app_id=application_id,
                        user=user,
                        scopes=scopes,
                        access_token=access_token,
