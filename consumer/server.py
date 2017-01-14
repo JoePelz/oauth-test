@@ -122,7 +122,8 @@ class Private(object):
 
         # Exchange the auth code for a token
         params = {
-            'client_id': "0123456789abcdef",
+            'client_id': "BGMb7v3I",
+            'secret': "2DME760r6dD1Wb7Yw5tS-W5xlXbr9AEC",
             'redirect_uri': 'http://localhost:8080/private',
             'state': session['state'],
             'code': GET_data['code']
@@ -171,10 +172,11 @@ class Login(object):
         session.pop('access_token', None)
 
         params = {
-            'client_id': "0123456789abcdef",
+            'client_id': "BGMb7v3I",
+            'secret': "2DME760r6dD1Wb7Yw5tS-W5xlXbr9AEC",
             'redirect_uri': 'http://localhost:8080/private',
             'response_type': 'code',
-            'scope': 'base',
+            'scope': 'basic',
             'state': session['state']
         }
 
