@@ -19,7 +19,8 @@ log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
 
 app = web.application(constants.urls, globals())
-session = web.session.Session(app, common.session_store)
+#session = web.session.Session(app, common.session_store)
+session = {}
 
 validator = MyRequestValidator()
 oauth_server = WebApplicationServer(validator)

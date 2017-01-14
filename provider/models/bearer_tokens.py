@@ -1,7 +1,7 @@
-class BearerToken(object):
+class BearerTokens(object):
     def __init__(self, db):
         self.db = db
-        self.table = "BearerToken"
+        self.table = "BearerTokens"
 
     def remove(self, application_id, user):
         qvars = {

@@ -2,13 +2,13 @@ import inspect
 import common
 from oauthlib.oauth2 import RequestValidator
 from models.applications import Applications
-from models.authorization_code import AuthorizationCode
-from models.bearer_token import BearerToken
+from models.authorization_codes import AuthorizationCodes
+from models.bearer_tokens import BearerTokens
 
 
 class MyRequestValidator(RequestValidator):
     def __init__(self):
-        self.clients = Applications(common.db)
+        self.apps = Applications(common.db)
 
     # Ordered roughly in order of appearance in the authorization grant flow
 
@@ -16,43 +16,47 @@ class MyRequestValidator(RequestValidator):
 
     def validate_client_id(self, app_id, request, *args, **kwargs):
         # Simple validity check, does client exist? Not banned?
-        client = self.clients.exists(app_id)
-        return client is not None
+        print("validate app id")
+        app = self.apps.exists(app_id)
+        return app
 
     def validate_redirect_uri(self, app_id, redirect_uri, request, *args, **kwargs):
         # Is the client allowed to use the supplied redirect_uri? i.e. has
         # the client previously registered this EXACT redirect uri.
-        client = self.clients.get(app_id)
-        uris = client.redirect_uris.split(' ')
+        print("validate redirect uri")
+        app = self.apps.get(app_id)
+        uris = app.redirect_uris.split(' ')
         return redirect_uri and redirect_uri in uris
 
     def get_default_redirect_uri(self, app_id, request, *args, **kwargs):
         # The redirect used if none has been supplied.
         # Prefer your clients to pre register a redirect uri rather than
         # supplying one on each authorization request.
-        client = self.clients.get(app_id)
-        return client.default_redirect_uri
+        print("get default redirect uri")
+        app = self.apps.get(app_id)
+        return app.default_redirect_uri
 
     def validate_scopes(self, app_id, scopes, client, request, *args, **kwargs):
         # Is the client allowed to access the requested scopes?
         print("validate_scopes")
-        client = self.clients.get(app_id)
-        client_scopes = client.scopes.split(' ')
-        return all([requested_scope in client_scopes for requested_scope in scopes])
+        app = self.apps.get(app_id)
+        app_scopes = app.scopes.split(' ')
+        return all([requested_scope in app_scopes for requested_scope in scopes])
 
     def get_default_scopes(self, app_id, request, *args, **kwargs):
         # Scopes a client will authorize for if none are supplied in the
         # authorization request.
         print("get_default_scopes")
-        client = self.clients.get(app_id)
-        return client.default_scopes
+        app = self.apps.get(app_id)
+        return app.default_scopes
 
     def validate_response_type(self, app_id, response_type, client, request, *args, **kwargs):
         # Clients should only be allowed to use one type of response type, the
         # one associated with their one allowed grant type.
         # In this case it must be "code".
-        client = self.clients.get(app_id)
-        return response_type == client.response_type
+        print("validate response type")
+        app = self.apps.get(app_id)
+        return response_type == app.response_type
 
     # Post-authorization
 
@@ -63,9 +67,9 @@ class MyRequestValidator(RequestValidator):
         print('save_authorization_code')
         code_string = code['code']
         state = code.get('state', '')
-        auth = AuthorizationCode(common.db)
+        auth = AuthorizationCodes(common.db)
         auth.set(application_id=request.client,
-                 user=request.user,
+                 user_id=request.user,
                  code=code_string,
                  scopes=' '.join(request.scopes),
                  state=state,
@@ -87,7 +91,7 @@ class MyRequestValidator(RequestValidator):
         # Validate the code belongs to the client. Add associated scopes,
         # state and user to request.scopes and request.user.
         print("validate_code")
-        auth = AuthorizationCode(common.db)
+        auth = AuthorizationCodes(common.db)
         match = auth.match(app_id=client, code=code)
         # TODO: test if expiration time is passed
         # TODO: test if state (salt) matches
@@ -101,7 +105,7 @@ class MyRequestValidator(RequestValidator):
 
     def confirm_redirect_uri(self, app_id, code, redirect_uri, client, *args, **kwargs):
         # You did save the redirect uri with the authorization code right?
-        auth = AuthorizationCode(common.db)
+        auth = AuthorizationCodes(common.db)
         match = auth.match(app_id=client, code=code)
         if not match:
             return False
@@ -127,7 +131,7 @@ class MyRequestValidator(RequestValidator):
         access_token_code = token['access_token']
         refresh_token_code = token.get('refresh_token', None)
 
-        bt = BearerToken(common.db)
+        bt = BearerTokens(common.db)
         bt.set(application_id=request.client,
                user=request.user,
                scopes=scope,
@@ -137,7 +141,7 @@ class MyRequestValidator(RequestValidator):
     def invalidate_authorization_code(self, app_id, code, request, *args, **kwargs):
         # Authorization codes are use once, invalidate it when a Bearer token
         # has been acquired.
-        auth = AuthorizationCode(common.db)
+        auth = AuthorizationCodes(common.db)
         auth.remove(app_id, code)
 
     # Protected resource request
@@ -146,7 +150,7 @@ class MyRequestValidator(RequestValidator):
         # Remember to check expiration and scope membership
         # TODO: Remember to check expiration and scope membership
         print("validate_bearer_token")
-        bt = BearerToken(common.db)
+        bt = BearerTokens(common.db)
         db_token = bt.get_access(token)
         return db_token and all([scope in db_token.scopes for scope in scopes])
 
@@ -158,7 +162,7 @@ class MyRequestValidator(RequestValidator):
         # access token if the client did not specify a scope during the
         # request.
         print("get_original_scopes")
-        bt = BearerToken(common.db)
+        bt = BearerTokens(common.db)
         db_token = bt.get_access(refresh_token)
         scopes = db_token.scopes.split(' ')
         return scopes
