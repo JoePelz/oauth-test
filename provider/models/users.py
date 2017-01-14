@@ -1,9 +1,6 @@
 import time
 import bcrypt
 
-# users.add("one@two.com", "tunafish", name="Adrie", memo="secret text")
-
-
 class Users(object):
     def __init__(self, db):
         self.db = db
@@ -60,10 +57,12 @@ class Users(object):
         user = rows.first()
         if user:
             raise KeyError("Email already exists")
-        else:
-            hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
 
-            self.db.insert(self.table, email=email, password=hashed_password, **kwargs)
+        hashed_password = bcrypt.hashpw(password, bcrypt.gensalt())
+
+        user_id = self.db.insert(self.table, email=email, password=hashed_password, **kwargs)
+
+        return user_id
 
     def storeRememberToken(self, account_id, token, secret):
         qvars = {

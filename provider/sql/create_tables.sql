@@ -11,17 +11,20 @@ CREATE TABLE IF NOT EXISTS Users
 
 -- subscription type could be a foreign key to a subtable with specific billing/access information
 CREATE TABLE IF NOT EXISTS Subscriptions
-( app_id            CHAR(100) NOT NULL
+( subscription_id   INTEGER PRIMARY KEY
+, app_id            CHAR(8) NOT NULL
 , user_id           INTEGER NOT NULL
 , subscription_type TEXT
-, CONSTRAINT pk_S_aiui PRIMARY KEY (`app_id`, `user_id`)
+, CONSTRAINT pk_S_aiui UNIQUE (`app_id`, `user_id`)
 , CONSTRAINT fk_S_ai FOREIGN KEY (`app_id`) REFERENCES `Applications`(`app_id`)
 , CONSTRAINT fk_S_ui FOREIGN KEY (`user_id`) REFERENCES `Users`(`id`)
 );
 
 CREATE TABLE IF NOT EXISTS Applications
-( app_id            CHAR(100) NOT NULL
+( app_id            CHAR(8) NOT NULL
 , user_id           INTEGER NOT NULL
+, nicename          TEXT
+, secret_key        CHAR(32) NOT NULL
 , grant_type        CHAR(18) DEFAULT 'authorization_code'
 , response_type     CHAR(4) DEFAULT 'code'
 , scopes            TEXT
@@ -33,7 +36,7 @@ CREATE TABLE IF NOT EXISTS Applications
 );
 
 CREATE TABLE IF NOT EXISTS AuthorizationCodes
-( app_id            CHAR(100) UNIQUE
+( app_id            CHAR(8) NOT NULL
 , code              CHAR(100) NOT NULL
 , user_id           INTEGER NOT NULL
 , scopes            TEXT
@@ -46,7 +49,7 @@ CREATE TABLE IF NOT EXISTS AuthorizationCodes
 );
 
 CREATE TABLE IF NOT EXISTS BearerTokens
-( app_id            CHAR(100) NOT NULL UNIQUE
+( app_id            CHAR(8) NOT NULL
 , user_id           INTEGER NOT NULL
 , scopes            TEXT
 , access_token      CHAR(100) NOT NULL UNIQUE

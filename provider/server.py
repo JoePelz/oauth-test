@@ -12,7 +12,6 @@ import hashlib
 import binascii
 import hmac
 from models.users import Users
-import time
 
 # enable logging, while under development
 log = logging.getLogger('oauthlib')
@@ -25,10 +24,6 @@ session = web.session.Session(app, common.session_store)
 validator = MyRequestValidator()
 oauth_server = WebApplicationServer(validator)
 
-
-# ====================================================
-# curl -H 'Accept: application/json' localhost:8081/ -d '{"a":"b"}' -H "Content-Type: application/json" -H "Authorization: Bearer 123abc"
-# http://localhost:8081/authorize?client_id=0123456789abcdef&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fprivate&response_type=code&scope=base
 
 def report_init(page, protocol, webinput):
     print(" {page} {protocol} ".format(page=page, protocol=protocol).center(50, '-'))
