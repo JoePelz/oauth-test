@@ -23,6 +23,7 @@ validator = MyRequestValidator()
 oauth_server = WebApplicationServer(validator)
 
 
+
 def report_init(page, protocol, webinput):
     print(" {page} {protocol} ".format(page=page, protocol=protocol).center(50, '-'))
     print("SESSION ID: {0}".format(web.ctx.environ.get('HTTP_COOKIE', 'unknown')))
@@ -42,7 +43,7 @@ class Home(object):
         if "logged_in" in session and session['logged_in'] is True and "user_id" in session:
             return session['user_id']
 
-        cookie = web.cookies().get('rememberme')
+        cookie = web.cookies().get(constants.REMEMBER_COOKIE_NAME)
         if cookie:
             cookie_parts = cookie.split(":")
             if len(cookie_parts) == 3:
@@ -56,9 +57,6 @@ class Home(object):
     def get_user_data(self, user_id):
         user = dict(self.users.get_by_id(user_id))
         subs = self.subscriptions.get_by_user(user_id)
-        print("\n -- GET USER DATA --\n")
-        print(subs)
-        print(" ")
         user['subscriptions'] = map(dict, subs)
         return user
 
@@ -86,7 +84,7 @@ class Login(object):
         duration = 31536000  # 60*60*24*365 # 1 year-ish
         # TODO: set secure=True to require HTTPS
         # TODO: does the domain or path need to be set?
-        web.setcookie('rememberme', cookie_text, expires=duration, domain="auth.local", path="/")
+        web.setcookie(constants.REMEMBER_COOKIE_NAME, cookie_text, expires=duration, domain="auth.local", path="/")
         # setcookie(name, value, expires='', domain=None, secure=False, httponly=False, path=None):
 
     def get_user(self, data):
@@ -117,7 +115,7 @@ class Logout(object):
     def GET(self):
         data = web.input()
         report_init("LOGOUT", "GET", data)
-        web.setcookie('rememberme', "", expires=-1)
+        web.setcookie(constants.REMEMBER_COOKIE_NAME, "", expires=-1, domain="auth.local", path="/")
         session.kill()
         web.seeother("/")
 

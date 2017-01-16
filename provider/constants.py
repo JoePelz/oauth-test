@@ -14,3 +14,5 @@ urls = (
     '/authorize', 'Authorize',
     '/token', 'Token',
 )
+
+REMEMBER_COOKIE_NAME = "rememberme"
