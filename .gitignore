@@ -103,3 +103,5 @@ sessions/
 # ssl certificate files
 *.crt
 *.key
+
+temp.*

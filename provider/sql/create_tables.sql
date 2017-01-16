@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS Subscriptions
 
 CREATE TABLE IF NOT EXISTS Applications
 ( app_id            CHAR(8) NOT NULL
-, user_id           INTEGER NOT NULL
+, owner_id          INTEGER NOT NULL
 , nicename          TEXT
 , secret_key        CHAR(32) NOT NULL
 , grant_type        CHAR(18) DEFAULT 'authorization_code'
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS Applications
 , redirect_uris     TEXT
 , default_redirect_uri TEXT
 , CONSTRAINT pk_A_ai PRIMARY KEY (`app_id`)
-, CONSTRAINT fk_A_user FOREIGN KEY (`user_id`) REFERENCES `Users`(`id`)
+, CONSTRAINT fk_A_user FOREIGN KEY (`owner_id`) REFERENCES `Users`(`id`)
 );
 
 CREATE TABLE IF NOT EXISTS AuthorizationCodes

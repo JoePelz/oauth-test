@@ -74,7 +74,7 @@ class Applications(object):
         """
         qvars = {
             'nicename': name,
-            'user_id': owner_id,
+            'owner_id': owner_id,
             'scopes': " ".join(scopes),
             'redirect_uris': " ".join(redirect_uris)
         }

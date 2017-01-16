@@ -1,5 +1,29 @@
 import time
+import os
 import bcrypt
+import hashlib
+import binascii
+import hmac
+import base64
+import math
+
+
+def b64_url_encode(bytes):
+    return base64.b64encode(bytes, "-_")
+
+
+def generate_salt(length):
+    """
+    Generate a cryptographically secure random base64 code of the desired length
+    :param length: The desired output string length
+    :return: A base64 encoded salt
+    """
+    # base64 stores 6 bits per symbol but os.urandom gives 8 bits per symbol
+    bytes_needed = int(math.ceil(length * 6.0 / 8.0))
+    bytes = os.urandom(bytes_needed)
+    encoded = b64_url_encode(bytes)
+    return encoded[:length]
+
 
 class Users(object):
     def __init__(self, db):
@@ -17,6 +41,36 @@ class Users(object):
         }
         now = int(time.time())
         self.db.update(self.table, "email=$email", vars=qvars, last_access=now)
+
+    def get_login_cookie(self, user_id):
+        token = generate_salt(32)
+        secret_key = generate_salt(32)
+        self.storeRememberToken(user_id, token, secret_key)
+        cookie_text = "{0}:{1}".format(user_id, token)
+        dk = hashlib.pbkdf2_hmac('sha256', cookie_text, secret_key, 100000)
+        ascii_hash = binascii.hexlify(dk)
+        cookie_text = "{0}:{1}".format(cookie_text, ascii_hash)
+        return cookie_text
+
+    def validate_login_cookie(self, user_id, token, cookie_hash):
+        """
+        Validate a "remember me" cookie meant to keep a user logged in.
+        :param cookie: The cookie saved to remember a user being logged in.
+        :return: True or False if the cookie matches a login credential
+        """
+        valid = False
+        user = self.get_by_id(user_id)
+        if user:
+            print("memory of user found")
+            saved_token = user.remember_token
+            saved_key = user.secret_key
+            dk = hashlib.pbkdf2_hmac('sha256', "{0}:{1}".format(user_id, saved_token), saved_key, 100000)
+            ascii_hash = binascii.hexlify(dk)
+            matches = hmac.compare_digest("{0}:{1}:{2}".format(user_id, token, cookie_hash), "{0}:{1}:{2}".format(user_id, saved_token, ascii_hash))
+            if matches:
+                print("user codes match! User is remembered")
+                valid = True
+        return valid
 
     def get_by_id(self, account):
         qvars = {

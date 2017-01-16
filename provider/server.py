@@ -1,17 +1,15 @@
 import traceback
+from oauthlib.oauth2 import WebApplicationServer
+import oauthlib.oauth2.rfc6749.errors as errors
+import logging
+import sys
 import web
 web.config.debug = False
 import constants
-from request_validator import MyRequestValidator
-from oauthlib.oauth2 import WebApplicationServer
-import oauthlib.oauth2.rfc6749.errors as errors
 import common
-import logging
-import sys
-import hashlib
-import binascii
-import hmac
+from request_validator import MyRequestValidator
 from models.users import Users
+from models.subscriptions import Subscriptions
 
 # enable logging, while under development
 log = logging.getLogger('oauthlib')
@@ -19,8 +17,7 @@ log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
 
 app = web.application(constants.urls, globals())
-#session = web.session.Session(app, common.session_store)
-session = {}
+session = web.session.Session(app, common.session_store)
 
 validator = MyRequestValidator()
 oauth_server = WebApplicationServer(validator)
@@ -37,73 +34,59 @@ def report_init(page, protocol, webinput):
 
 
 class Home(object):
+    def __init__(self):
+        self.users = Users(common.db)
+        self.subscriptions = Subscriptions(common.db)
 
-    def is_remembered(self):
-        print("attempting to remember user")
+    def get_user_id(self):
+        if "logged_in" in session and session['logged_in'] is True and "user_id" in session:
+            return session['user_id']
+
         cookie = web.cookies().get('rememberme')
-        if not cookie:
-            print("No cookie found.")
-            return False
-        try:
-            account, token, _hash = cookie.split(":")
-            users = Users(common.db)
-            user = users.get_by_id(account)
-            if user:
-                print("memory of user found")
-                saved_token = user.remember_token
-                saved_key = user.secret_key
-                dk = hashlib.pbkdf2_hmac('sha256', "{0}:{1}".format(account, saved_token), saved_key, 100000)
-                ascii_hash = binascii.hexlify(dk)
-                matches = hmac.compare_digest(cookie, "{0}:{1}:{2}".format(account, saved_token, ascii_hash))
-                if matches:
-                    print("user codes match! User is remembered")
-                    return user
-        except:
-            traceback.print_exc()
-        return False
+        if cookie:
+            cookie_parts = cookie.split(":")
+            if len(cookie_parts) == 3:
+                uid, token, hash = cookie_parts
+                if self.users.validate_login_cookie(uid, token, hash):
+                    session['logged_in'] = True
+                    session['user_id'] = uid
+                    return uid
+        return None
 
-    def is_logged_in(self):
-        return "logged_in" in session and session['logged_in'] is True and "name" in session
+    def get_user_data(self, user_id):
+        user = dict(self.users.get_by_id(user_id))
+        subs = self.subscriptions.get_by_user(user_id)
+        print("\n -- GET USER DATA --\n")
+        print(subs)
+        print(" ")
+        user['subscriptions'] = map(dict, subs)
+        return user
 
     def GET(self):
         data = web.input()
         report_init("HOME", "GET", data)
 
-        # check if the user is currently logged in
-        is_logged_in = self.is_logged_in()
-
-        # if not logged in and they had checked "stay logged in", automatically log in the user.
-        if not is_logged_in:
-            user = self.is_remembered()
-            if user:
-                session['logged_in'] = True
-                session['name'] = user.name
-                is_logged_in = True
-
-        # if logged in, get user's name.
+        user_id = self.get_user_id()
+        is_logged_in = bool(user_id)
         if is_logged_in:
-            name = session['name']
+            user = self.get_user_data(user_id)
         else:
-            name = ""
+            user = None
 
-        return common.render.home(is_logged_in, name)
+        return common.render.home(is_logged_in, user)
 
 
 class Login(object):
+    def __init__(self):
+        self.users = Users(common.db)
 
-    def remember_me(self, account_id):
+    def save_cookie(self, account_id):
         print("Saving, for remembering later.")
-        token = common.generate_salt(32)
-        secret_key = common.generate_salt(32)
-        self.users.storeRememberToken(account_id, token, secret_key)
-        cookie_text = "{0}:{1}".format(account_id, token)
-        dk = hashlib.pbkdf2_hmac('sha256', cookie_text, secret_key, 100000)
-        ascii_hash = binascii.hexlify(dk)
-        cookie_text = "{0}:{1}".format(cookie_text, ascii_hash)
-        duration = 31536000  # 60*60*24*365 # 1 year
+        cookie_text = self.users.get_login_cookie(account_id)
+        duration = 31536000  # 60*60*24*365 # 1 year-ish
         # TODO: set secure=True to require HTTPS
         # TODO: does the domain or path need to be set?
-        web.setcookie('rememberme', cookie_text, expires=duration, domain="localhost", path="/")
+        web.setcookie('rememberme', cookie_text, expires=duration, domain="auth.local", path="/")
         # setcookie(name, value, expires='', domain=None, secure=False, httponly=False, path=None):
 
     def get_user(self, data):
@@ -114,7 +97,6 @@ class Login(object):
         except KeyError:
             return None
 
-        self.users = Users(common.db)
         user = self.users.get(email, password)
         return user
 
@@ -124,10 +106,10 @@ class Login(object):
 
         user = self.get_user(data)
         if user:
-            session['name'] = user['name']
+            session['user_id'] = user['id']
             session['logged_in'] = True
             if data.get('remember', " ") == "True":
-                self.remember_me(user['id'])
+                self.save_cookie(user['id'])
         web.seeother("/")
 
 

@@ -3,6 +3,17 @@ class Subscriptions(object):
         self.db = db
         self.table = "Subscriptions"
 
+    def get_by_user(self, user_id):
+        qvars = {
+            'uid': user_id
+        }
+        query = """SELECT *
+        FROM Subscriptions `S` JOIN Applications `A`
+            ON `S`.app_id = `A`.app_id
+        WHERE user_id = $uid"""
+        rows = self.db.query(query, vars=qvars)
+        return list(rows)
+
     def get(self, app_id, user_id):
         qvars = {
             'aid': app_id,

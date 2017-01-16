@@ -43,15 +43,18 @@ def create_session_tables(db, base_path):
 
 def db_setup(db, base_path):
     create_db(base_path, constants.DBPATH, constants.DBFILENAME)
+    db.query("PRAGMA foreign_keys = ON;")
     create_tables(db, base_path)
     create_session_tables(db, base_path)
 
 def get_db():
     db_path = os.path.join(constants.BASE_PATH, *constants.DBPATH)
     db_path = os.path.join(db_path, constants.DBFILENAME)
+    #old_debug_state = web.config.debug
+    #web.config.debug=True
     db = web.database(dbn='sqlite', db=db_path)
+    #web.config.debug=old_debug_state
 
-    db.query("PRAGMA foreign_keys = ON;")
     db_setup(db, constants.BASE_PATH)
 
     return db

@@ -3,6 +3,7 @@ import urllib
 import urllib2
 import base64
 import web
+from ConfigParser import SafeConfigParser
 web.config.debug = False
 
 # ====================================================
@@ -122,13 +123,13 @@ class Private(object):
 
         # Exchange the auth code for a token
         params = {
-            'client_id': "BGMb7v3I",
-            'secret': "2DME760r6dD1Wb7Yw5tS-W5xlXbr9AEC",
-            'redirect_uri': 'http://localhost:8080/private',
+            'client_id': config.get("credentials", "client_id"),
+            'secret': config.get("credentials", "client_secret"),
+            'redirect_uri': config.get("general", "redirect_uri"),
             'state': session['state'],
             'code': GET_data['code']
         }
-        token = postRequest(tokenURL, args=params)
+        token = postRequest(config.get("authentication", 'token_url'), args=params)
         print("token received:\n{0}".format(token))
         session['bearer_token'] = token
 
@@ -172,23 +173,22 @@ class Login(object):
         session.pop('access_token', None)
 
         params = {
-            'client_id': "BGMb7v3I",
-            'secret': "2DME760r6dD1Wb7Yw5tS-W5xlXbr9AEC",
-            'redirect_uri': 'http://localhost:8080/private',
-            'response_type': 'code',
-            'scope': 'basic',
+            'client_id': config.get("credentials", "client_id"),
+            'secret': config.get("credentials", "client_secret"),
+            'redirect_uri': config.get("general", "redirect_uri"),
+            'response_type': config.get("general", "response_type"),
+            'scope': config.get("general", 'scope'),
             'state': session['state']
         }
 
         # Redirect the user to the authorization page
         qstring = urllib.urlencode(params)
-        print("redirecting to {0}?{1}".format(authorizeURL, qstring))
-        raise web.seeother("{0}?{1}".format(authorizeURL, qstring))
+        print("redirecting to {0}?{1}".format(config.get("authentication", 'authorization_url'), qstring))
+        raise web.seeother("{0}?{1}".format(config.get("authentication", 'authorization_url'), qstring))
 
     def POST(self):
         data = web.input()
         report_init("LOGIN", "POST", session, data)
-        GET_data = web.input()
 
 
 class Logout(object):
@@ -215,11 +215,9 @@ urls = (
 )
 
 BASE_PATH = "."
-# This is the URL we'll send the user to first to get their authorization
-authorizeURL = 'http://localhost:8081/authorize'
 
-# This is the endpoint our server will request an access token from
-tokenURL = 'http://localhost:8081/token'
+config = SafeConfigParser()
+config.read("app.cfg")
 
 app = web.application(urls, globals())
 
