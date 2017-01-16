@@ -9,6 +9,20 @@ web.config.debug = False
 # ====================================================
 
 
+def create_db(base_path, path, filename):
+
+    # make sure folder exists
+    db_path = os.path.join(base_path, *path)
+    if not os.path.exists(db_path):
+        os.makedirs(db_path)
+
+    # make sure db exists
+    full_path = os.path.join(db_path, filename)
+    if not os.path.exists(full_path):
+        f = open(full_path, 'a')
+        f.close()
+
+
 def parse_sql_file(path):
     with open(path, 'r') as f:
         lines = f.readlines()
@@ -215,6 +229,8 @@ urls = (
 )
 
 BASE_PATH = "."
+DBPATH = ['data']
+DBFILENAME = 'dev.db'
 
 config = SafeConfigParser()
 config.read("app.cfg")
@@ -224,10 +240,12 @@ app = web.application(urls, globals())
 web.config.session_parameters['cookie_path'] = "/"
 
 # set up database
-db_path = os.path.join(BASE_PATH, "data", "dev.db")
+create_db(BASE_PATH, DBPATH, DBFILENAME)
+db_path = os.path.join(BASE_PATH, *DBPATH)
+db_path = os.path.join(db_path, DBFILENAME)
 db = web.database(dbn='sqlite', db=db_path)
-db.query("PRAGMA foreign_keys = ON;")
 exec_sql(db, os.path.join(BASE_PATH, "sql", "session_table.sql"))
+db.query("PRAGMA foreign_keys = ON;")
 
 # set up session
 store = web.session.DBStore(db, 'sessions')
