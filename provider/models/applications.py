@@ -50,6 +50,13 @@ class Applications(object):
         app = rows.first()
         return app is not None
 
+    def get_by_owner(self, user_id):
+        qvars = {
+            'uid': user_id
+        }
+        rows = self.db.select(self.table, where="owner_id=$uid", vars=qvars)
+        return list(rows)
+
     def get(self, application_id):
         """
         :param application_id: unique id to search for

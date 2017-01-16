@@ -10,6 +10,7 @@ import common
 from request_validator import MyRequestValidator
 from models.users import Users
 from models.subscriptions import Subscriptions
+from models.applications import Applications
 
 # enable logging, while under development
 log = logging.getLogger('oauthlib')
@@ -38,6 +39,7 @@ class Home(object):
     def __init__(self):
         self.users = Users(common.db)
         self.subscriptions = Subscriptions(common.db)
+        self.applications = Applications(common.db)
 
     def get_user_id(self):
         if "logged_in" in session and session['logged_in'] is True and "user_id" in session:
@@ -56,8 +58,15 @@ class Home(object):
 
     def get_user_data(self, user_id):
         user = dict(self.users.get_by_id(user_id))
+
+        # accessible apps
         subs = self.subscriptions.get_by_user(user_id)
         user['subscriptions'] = map(dict, subs)
+
+        # ownded apps
+        apps = self.applications.get_by_owner(user_id)
+        user['apps'] = apps
+
         return user
 
     def GET(self):

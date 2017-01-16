@@ -8,16 +8,23 @@ $def with (is_logged_in, user)
 <body>
 $if is_logged_in:
   <h1>You are logged in as $user['name'].title().</h1>
-  <p>You have access to:</p>
-  <ul>
-    $for sub in user['subscriptions']:
-      <li>$sub['nicename']
-        <ul>
-          <li>client_id: $sub['app_id']</li>
-          <li>client_secret: $sub['secret_key']</li>
-        </ul>
-      </li>
-  </ul>
+  $if user['subscriptions']:
+    <p>You have access to:</p>
+    <ul>
+      $for sub in user['subscriptions']:
+        <li>$sub['nicename']</li>
+    </ul>
+  $if user['apps']:
+    <p>You have are owner of:</p>
+    <ul>
+      $for app in user['apps']:
+        <li>$app['nicename']
+          <ul>
+            <li>client_id: $app['app_id']</li>
+            <li>client_secret: $app['secret_key']</li>
+          </ul>
+        </li>
+    </ul>
   <a href="/logout">Logout</a>
 $else:
   <h1>You are not logged in.</h1>

@@ -7,10 +7,10 @@ class Subscriptions(object):
         qvars = {
             'uid': user_id
         }
-        query = """SELECT *
+        query = """SELECT `S`.app_id, user_id, subscription_id, subscription_type, nicename
         FROM Subscriptions `S` JOIN Applications `A`
             ON `S`.app_id = `A`.app_id
-        WHERE user_id = $uid"""
+        WHERE `S`.user_id = $uid OR `A`.owner_id = $uid"""
         rows = self.db.query(query, vars=qvars)
         return list(rows)
 
