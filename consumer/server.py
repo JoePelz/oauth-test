@@ -146,10 +146,12 @@ class Private(object):
         )
         oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope)
         print("authorization response is {0}".format(authorization_response))
+        # TODO: verify = FALSE only for testing
         token = oauth.fetch_token(
             config.get('authentication', 'token_url'),
             authorization_response=authorization_response,
-            client_secret=self.client_secret)
+            client_secret=self.client_secret,
+            verify=False)
         print("token is {0}".format(token))
 
     def GET(self):
@@ -243,6 +245,7 @@ DBFILENAME = 'dev.db'
 config = SafeConfigParser()
 config.read("app.cfg")
 
+# openssl req -x509 -sha256 -nodes -newkey rsa:2048 -days 365 -keyout localhost.key -out localhost.crt
 CherryPyWSGIServer.ssl_certificate = "./localhost.crt"
 CherryPyWSGIServer.ssl_private_key = "./localhost.key"
 

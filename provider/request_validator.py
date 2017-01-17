@@ -6,6 +6,10 @@ from models.authorization_codes import AuthorizationCodes
 from models.bearer_tokens import BearerTokens
 
 
+class dummy():
+    pass
+
+
 class MyRequestValidator(RequestValidator):
     def __init__(self):
         self.apps = Applications(common.db)
@@ -84,6 +88,14 @@ class MyRequestValidator(RequestValidator):
         # Whichever authentication method suits you, HTTP Basic might work
         # TODO: generate secret for each client app. Use app id and secret to authenticate client.
         # see https://github.com/evonove/django-oauth-toolkit/blob/master/oauth2_provider/oauth2_validators.py#L51
+        print("authenticate_client")
+        print("request.client_id: {0}".format(request.client_id))
+        print("request.code: {0}".format(request.code))
+        print("request.client_secret: {0}".format(request.client_secret))
+        client = dummy()
+        client.client_id = request.client_id
+        # client.client_secret = request.client_secret
+        request.client = client
         return True
 
     def authenticate_client_id(self, app_id, request, *args, **kwargs):
@@ -95,12 +107,14 @@ class MyRequestValidator(RequestValidator):
         # state and user to request.scopes and request.user.
         print("validate_code")
         auth = AuthorizationCodes(common.db)
-        match = auth.match(app_id=client, code=code)
+        print("client is {0}".format(client))
+        print("client.client_id is {0}".format(client.client_id))
+        match = auth.match(app_id=client.client_id, code=code)
         # TODO: test if expiration time is passed
         # TODO: test if state (salt) matches
         if match:
-            request.scope = match.scopes.split(' ')
-            request.user = match.user
+            request.scopes = match.scopes.split(' ')
+            request.user = match.user_id
             request.state = match.state
             return True
         else:
@@ -109,7 +123,7 @@ class MyRequestValidator(RequestValidator):
     def confirm_redirect_uri(self, app_id, code, redirect_uri, client, *args, **kwargs):
         # You did save the redirect uri with the authorization code right?
         auth = AuthorizationCodes(common.db)
-        match = auth.match(app_id=client, code=code)
+        match = auth.match(app_id=client.client_id, code=code)
         if not match:
             return False
         saved_redirect_uri = match.redirect_uri
@@ -135,7 +149,7 @@ class MyRequestValidator(RequestValidator):
         refresh_token_code = token.get('refresh_token', None)
 
         bt = BearerTokens(common.db)
-        bt.set(application_id=request.client,
+        bt.set(application_id=request.client.client_id,
                user=request.user,
                scopes=scope,
                access_token=access_token_code,

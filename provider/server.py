@@ -4,6 +4,7 @@ from oauthlib.oauth2 import WebApplicationServer
 import oauthlib.oauth2.rfc6749.errors as errors
 import logging
 import sys
+import json
 import web
 web.config.debug = False
 from web.wsgiserver import CherryPyWSGIServer
@@ -19,6 +20,7 @@ log = logging.getLogger('oauthlib')
 log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
 
+# openssl req -x509 -sha256 -nodes -newkey rsa:2048 -days 365 -keyout localhost.key -out localhost.crt
 CherryPyWSGIServer.ssl_certificate = "./localhost.crt"
 CherryPyWSGIServer.ssl_private_key = "./localhost.key"
 
@@ -239,7 +241,6 @@ class Authorize(object):
         http_method = web.ctx.environ["REQUEST_METHOD"]
         body = web.ctx.get('data', '')
         headers = web.ctx.env.copy()
-        pprint.pprint(headers)
         headers.pop("wsgi.errors", None)
         headers.pop("wsgi.input", None)
 
@@ -275,17 +276,44 @@ class Authorize(object):
 
 class Token(object):
     def __init__(self):
-        self._authorization_endpoint = oauth_server
+        self._token_endpoint = oauth_server
 
     def GET(self):
         data = web.input()
         report_init("TOKEN", "GET", data)
+        print("Error. POST expected.")
         return common.render.dummy()
 
     def POST(self):
         data = web.input()
         report_init("TOKEN", "POST", data)
-        return common.render.dummy()
+
+        uri = "{scheme}://{host}{port}{path}".format(
+            scheme=web.ctx.env.get('wsgi.url_scheme', 'http'),
+            host=web.ctx.env['SERVER_NAME'],
+            port=':{0}'.format(web.ctx.env['SERVER_PORT']),
+            path=web.ctx.env['REQUEST_URI']
+        )
+        http_method = web.ctx.environ["REQUEST_METHOD"]
+        body = web.ctx.get('data', '')
+        headers = web.ctx.env.copy()
+        headers.pop("wsgi.errors", None)
+        headers.pop("wsgi.input", None)
+        headers = {
+            'CONTENT_TYPE': 'application/x-www-form-urlencoded;charset=UTF-8'
+        }
+
+        # If you wish to include request specific extra credentials for
+        # use in the validator, do so here.
+        credentials = {
+            'foo': 'bar'
+        }
+
+        headers, body, status = self._token_endpoint.create_token_response(
+            uri, http_method, body, headers, credentials)
+
+        # All requests to /token will return a json response, no redirection.
+        return response_from_return(headers, body, status)
 
 
 def response_from_return(headers, body, status):
@@ -294,7 +322,14 @@ def response_from_return(headers, body, status):
     print("  body: {0}".format(body))
     print("  status: {0}".format(status))
     # raise web.seeother("http://www.google.ca")
-    raise web.HTTPError(status, headers, body)
+    response={
+        'body': body,
+        'status': status,
+    }
+    response.update(headers)
+
+    web.header("Content-Type", "application/json")
+    return json.dumps(response)
 
 
 def response_from_error(e):

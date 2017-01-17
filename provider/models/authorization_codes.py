@@ -25,5 +25,5 @@ class AuthorizationCodes(object):
     def match(self, **keys):
         where = " AND ".join(map("{0}=${0}".format, keys.keys()))
         qvars = keys
-        rows = self.db.select(self.table, where, vars=qvars)
+        rows = self.db.select(self.table, where=where, vars=qvars)
         return rows.first()
