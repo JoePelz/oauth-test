@@ -6,6 +6,7 @@ import logging
 import sys
 import web
 web.config.debug = False
+from web.wsgiserver import CherryPyWSGIServer
 import constants
 import common
 from request_validator import MyRequestValidator
@@ -18,12 +19,14 @@ log = logging.getLogger('oauthlib')
 log.addHandler(logging.StreamHandler(sys.stdout))
 log.setLevel(logging.DEBUG)
 
+CherryPyWSGIServer.ssl_certificate = "./localhost.crt"
+CherryPyWSGIServer.ssl_private_key = "./localhost.key"
+
 app = web.application(constants.urls, globals())
 session = web.session.Session(app, common.session_store)
 
 validator = MyRequestValidator()
 oauth_server = WebApplicationServer(validator)
-
 
 
 def report_init(page, protocol, webinput):

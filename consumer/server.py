@@ -2,10 +2,11 @@ import os
 import urllib
 import urllib2
 import base64
-import web
-from ConfigParser import SafeConfigParser
-web.config.debug = False
 import requests_oauthlib
+import web
+web.config.debug = False
+from web.wsgiserver import CherryPyWSGIServer
+from ConfigParser import SafeConfigParser
 
 # ====================================================
 
@@ -240,6 +241,9 @@ DBFILENAME = 'dev.db'
 
 config = SafeConfigParser()
 config.read("app.cfg")
+
+CherryPyWSGIServer.ssl_certificate = "./localhost.crt"
+CherryPyWSGIServer.ssl_private_key = "./localhost.key"
 
 app = web.application(urls, globals())
 
