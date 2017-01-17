@@ -25,7 +25,7 @@ app_id = apps.add(
     name="WidgetBuilder",
     owner_id=boss_id,
     scopes=["basic", "admin"],
-    redirect_uris=["http://app.local:8080/public", "http://app.local:8080/private"])
+    redirect_uris=["https://app.local:8080/public", "https://app.local:8080/private"])
 
 subs.add(app_id=app_id,
          user_id=user_id,

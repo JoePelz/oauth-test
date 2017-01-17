@@ -130,16 +130,16 @@ class Private(object):
             session['counter'] = 0
         else:
             session['counter'] += 1
-        self.redirect_uri = config.get("general", "redirect_uri")
-        self.response_type = 'code'
-        self.client_id = config.get("credentials", "client_id")
-        self.client_secret = config.get("credentials", "client_secret")
-        self.scope = config.get("general", 'scope')
+        self.redirect_uri = unicode(config.get('general', 'redirect_uri'))
+        self.response_type = u'code'
+        self.client_id = unicode(config.get('credentials', 'client_id'))
+        self.client_secret = unicode(config.get('credentials', 'client_secret'))
+        self.scope = unicode(config.get('general', 'scope'))
 
     def retrieve_key(self, GET_data):
         print("retrieving key.")
         authorization_response = "{scheme}://{host}{port}{path}".format(
-            scheme=web.ctx.env.get('wsgi.url_scheme', 'http'),
+            scheme=web.ctx.env.get('wsgi.url_scheme', 'https'),
             host=web.ctx.env['SERVER_NAME'],
             port=':{0}'.format(web.ctx.env['SERVER_PORT']),
             path=web.ctx.env['REQUEST_URI']
@@ -147,7 +147,7 @@ class Private(object):
         oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope)
         print("authorization response is {0}".format(authorization_response))
         token = oauth.fetch_token(
-            config.get('authorization', 'token_url'),
+            config.get('authentication', 'token_url'),
             authorization_response=authorization_response,
             client_secret=self.client_secret)
         print("token is {0}".format(token))
@@ -178,11 +178,11 @@ class Login(object):
             session['counter'] = 0
         else:
             session['counter'] += 1
-        self.redirect_uri = config.get("general", "redirect_uri")
-        self.response_type = 'code'
-        self.client_id = config.get("credentials", "client_id")
-        self.client_secret = config.get("credentials", "client_secret")
-        self.scope = config.get("general", 'scope')
+        self.redirect_uri = unicode(config.get('general', 'redirect_uri'))
+        self.response_type = u'code'
+        self.client_id = unicode(config.get('credentials', 'client_id'))
+        self.client_secret = unicode(config.get('credentials', 'client_secret'))
+        self.scope = unicode(config.get('general', 'scope'))
 
 
     def GET(self):
@@ -194,8 +194,9 @@ class Login(object):
         enc_seq = base64.b64encode(seq)
         session['state'] = enc_seq
         session.pop('access_token', None)
-
-        oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope)
+        print("redirect_uri is {0}".format(self.redirect_uri))
+        print("scope is {0}, {0.__class__}".format(self.scope))
+        oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=unicode(self.scope))
         authorization_url, state = oauth.authorization_url(
             config.get('authentication', 'authorization_url'),
             # access_type and approval_prompt are Google specific extra
