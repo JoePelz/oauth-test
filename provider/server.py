@@ -1,3 +1,4 @@
+import pprint
 import traceback
 from oauthlib.oauth2 import WebApplicationServer
 import oauthlib.oauth2.rfc6749.errors as errors
@@ -201,6 +202,7 @@ class Authorize(object):
             # NOTE: I need to remove "request" because it stores custom data structures
             # and fails to be properly pickled into the session storage
             credentials.pop("request", None)
+            print("")
             print(credentials)
             # session['oauth2_credentials'] = credentials
 
@@ -234,6 +236,7 @@ class Authorize(object):
         http_method = web.ctx.environ["REQUEST_METHOD"]
         body = web.ctx.get('data', '')
         headers = web.ctx.env.copy()
+        pprint.pprint(headers)
         headers.pop("wsgi.errors", None)
         headers.pop("wsgi.input", None)
 

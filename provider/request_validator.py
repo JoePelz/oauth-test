@@ -65,10 +65,13 @@ class MyRequestValidator(RequestValidator):
         # request.client, request.state and request.user (the last is passed in
         # post_authorization credentials, i.e. { 'user': request.user}.
         print('save_authorization_code')
+        print("app_id is {0}".format(app_id))
+        print("code is {0}".format(code))
+        print("request is {0}".format(request))
         code_string = code['code']
         state = code.get('state', '')
         auth = AuthorizationCodes(common.db)
-        auth.set(application_id=request.client,
+        auth.set(application_id=app_id,
                  user_id=request.user,
                  code=code_string,
                  scopes=' '.join(request.scopes),

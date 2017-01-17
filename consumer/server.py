@@ -5,6 +5,7 @@ import base64
 import web
 from ConfigParser import SafeConfigParser
 web.config.debug = False
+import requests_oauthlib
 
 # ====================================================
 
@@ -128,26 +129,27 @@ class Private(object):
             session['counter'] = 0
         else:
             session['counter'] += 1
+        self.redirect_uri = config.get("general", "redirect_uri")
+        self.response_type = 'code'
+        self.client_id = config.get("credentials", "client_id")
+        self.client_secret = config.get("credentials", "client_secret")
+        self.scope = config.get("general", 'scope')
 
     def retrieve_key(self, GET_data):
-        # Verify the state matches our stored state
-        if 'state' not in GET_data or GET_data['state'] != session['state']:
-            print("State salt does not match.")
-            raise web.seeother("/public")
-
-        # Exchange the auth code for a token
-        params = {
-            'client_id': config.get("credentials", "client_id"),
-            'secret': config.get("credentials", "client_secret"),
-            'redirect_uri': config.get("general", "redirect_uri"),
-            'state': session['state'],
-            'code': GET_data['code']
-        }
-        token = postRequest(config.get("authentication", 'token_url'), args=params)
-        print("token received:\n{0}".format(token))
-        session['bearer_token'] = token
-
-        raise web.seeother("/private")
+        print("retrieving key.")
+        authorization_response = "{scheme}://{host}{port}{path}".format(
+            scheme=web.ctx.env.get('wsgi.url_scheme', 'http'),
+            host=web.ctx.env['SERVER_NAME'],
+            port=':{0}'.format(web.ctx.env['SERVER_PORT']),
+            path=web.ctx.env['REQUEST_URI']
+        )
+        oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope)
+        print("authorization response is {0}".format(authorization_response))
+        token = oauth.fetch_token(
+            config.get('authorization', 'token_url'),
+            authorization_response=authorization_response,
+            client_secret=self.client_secret)
+        print("token is {0}".format(token))
 
     def GET(self):
         data = web.input()
@@ -175,6 +177,12 @@ class Login(object):
             session['counter'] = 0
         else:
             session['counter'] += 1
+        self.redirect_uri = config.get("general", "redirect_uri")
+        self.response_type = 'code'
+        self.client_id = config.get("credentials", "client_id")
+        self.client_secret = config.get("credentials", "client_secret")
+        self.scope = config.get("general", 'scope')
+
 
     def GET(self):
         data = web.input()
@@ -186,19 +194,17 @@ class Login(object):
         session['state'] = enc_seq
         session.pop('access_token', None)
 
-        params = {
-            'client_id': config.get("credentials", "client_id"),
-            'secret': config.get("credentials", "client_secret"),
-            'redirect_uri': config.get("general", "redirect_uri"),
-            'response_type': config.get("general", "response_type"),
-            'scope': config.get("general", 'scope'),
-            'state': session['state']
-        }
+        oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope)
+        authorization_url, state = oauth.authorization_url(
+            config.get('authentication', 'authorization_url'),
+            # access_type and approval_prompt are Google specific extra
+            # parameters.
+            access_type="offline", approval_prompt="force")
+        print("---\nAuthorizing.")
+        print("Auth_url is {0}".format(authorization_url[:50]))
+        print("State is {0}".format(str(state)[:50]))
 
-        # Redirect the user to the authorization page
-        qstring = urllib.urlencode(params)
-        print("redirecting to {0}?{1}".format(config.get("authentication", 'authorization_url'), qstring))
-        raise web.seeother("{0}?{1}".format(config.get("authentication", 'authorization_url'), qstring))
+        raise web.seeother(authorization_url)
 
     def POST(self):
         data = web.input()
