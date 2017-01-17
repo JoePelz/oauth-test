@@ -317,19 +317,14 @@ class Token(object):
 
 
 def response_from_return(headers, body, status):
+
     print("doing response_from_return(...)")
     print("  headers: {0}".format(headers))
     print("  body: {0}".format(body))
     print("  status: {0}".format(status))
-    # raise web.seeother("http://www.google.ca")
-    response={
-        'body': body,
-        'status': status,
-    }
-    response.update(headers)
-
-    web.header("Content-Type", "application/json")
-    return json.dumps(response)
+    raise web.seeother("http://www.google.ca")
+    # raise web.HTTPError(status, headers, body)
+    raise web.HTTPError('200 OK', headers, body)
 
 
 def response_from_error(e):

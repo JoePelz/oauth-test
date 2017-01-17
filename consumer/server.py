@@ -1,12 +1,22 @@
 import os
+import sys
 import urllib
 import urllib2
 import base64
+import logging
 import requests_oauthlib
 import web
 web.config.debug = False
 from web.wsgiserver import CherryPyWSGIServer
 from ConfigParser import SafeConfigParser
+
+
+log = logging.getLogger('oauthlib')
+log.addHandler(logging.StreamHandler(sys.stdout))
+log.setLevel(logging.DEBUG)
+log = logging.getLogger('requests_oauthlib.oauth2_session')
+log.addHandler(logging.StreamHandler(sys.stdout))
+log.setLevel(logging.DEBUG)
 
 # ====================================================
 
@@ -45,56 +55,6 @@ def exec_sql(connection, path):
         connection.query(command)
 
 
-def getRequest(url, headers=None, args=None):
-    """
-    :param url:  The url to send the request to.  e.g.  https://example.org/test
-    :param headers:  dictionary of headers. e.g. {"Accepts": "text/html"}
-    :param args: dictionary of GET parameters to urlencode and append to the url
-    :return: the server response
-    """
-    print("Making GET request to {0}".format(url))
-    if args:
-        augmented_url = "{0}?{1}".format(url, urllib.urlencode(args))
-    else:
-        augmented_url = url
-
-    if not headers:
-        headers = {}
-
-    headers['Accept'] = "application/json"
-    if 'access_token' in session:
-        headers['Authorization'] = 'Bearer {0}'.format(session['access_token'])
-
-    request = urllib2.Request(augmented_url, headers=headers)
-    response = urllib2.urlopen(request).read()
-
-    return response
-
-def postRequest(url, headers=None, args=None):
-    """
-    :param url:  The url to send the request to.  e.g.  https://example.org/test
-    :param headers:  dictionary of headers. e.g. {"Accepts": "text/html"}
-    :param args: dictionary of POST parameters to urlencode and append to the url
-    :return: the server response
-    """
-    print("Making POST request to {0}".format(url))
-    if args:
-        post_data = urllib.urlencode(args)
-    else:
-        post_data = ''
-
-    if not headers:
-        headers = {}
-
-    headers['Accept'] = "application/json"
-    if 'access_token' in session:
-        headers['Authorization'] = 'Bearer {0}'.format(session['access_token'])
-
-    request = urllib2.Request(url, headers=headers)
-    response = urllib2.urlopen(request, post_data).read()
-
-    return response
-
 def report_init(page, protocol, session, webinput):
     print(" {page} {protocol} ".format(page=page, protocol=protocol).center(50, '-'))
     print("SESSION ID: {0}".format(web.ctx.environ.get('HTTP_COOKIE', 'unknown')))
@@ -103,6 +63,7 @@ def report_init(page, protocol, session, webinput):
     print("WEB INPUT: {0}".format(webinput))
     print("-"*50)
     print("\n")
+
 
 class Public(object):
     def __init__(self):
@@ -146,6 +107,7 @@ class Private(object):
         )
         oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope)
         print("authorization response is {0}".format(authorization_response))
+
         # TODO: verify = FALSE only for testing
         token = oauth.fetch_token(
             config.get('authentication', 'token_url'),
@@ -153,15 +115,18 @@ class Private(object):
             client_secret=self.client_secret,
             verify=False)
         print("token is {0}".format(token))
+        session['bearer_token'] = token
 
     def GET(self):
         data = web.input()
         report_init("PRIVATE", "GET", session, data)
 
         if 'code' in data:
+            print('"code" encountered. Retrieving key.')
             self.retrieve_key(data)
 
         if 'bearer_token' in session:
+            print('"bearer_token" is installed. granting access.')
             return render.private_page()
         else:
             print("redirecting to /public")
@@ -207,7 +172,7 @@ class Login(object):
         print("---\nAuthorizing.")
         print("Auth_url is {0}".format(authorization_url[:50]))
         print("State is {0}".format(str(state)[:50]))
-
+        print("redirecting to {0}".format(authorization_url))
         raise web.seeother(authorization_url)
 
     def POST(self):
