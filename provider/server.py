@@ -60,14 +60,13 @@ class Home(object):
         subs = common.subscriptions.get_by_user(user_id)
         user['subscriptions'] = map(dict, subs)
 
-        # ownded apps
+        # owned apps
         apps = common.applications.get_by_owner(user_id)
         user['apps'] = apps
 
         return user
 
     def GET(self):
-        print("GET begins")
         data = web.input()
         report_init("HOME", "GET", data)
 
@@ -102,6 +101,13 @@ class Login(object):
         user = common.users.get(email, password)
         return user
 
+    def GET(self):
+        data = web.input()
+        report_init("LOGIN", "GET", data)
+        # show login page
+        return common.render.login()
+
+
     def POST(self):
         data = web.input()
         report_init("LOGIN", "POST", data)
@@ -112,7 +118,13 @@ class Login(object):
             session['logged_in'] = True
             if data.get('remember', " ") == "True":
                 self.save_cookie(user['id'])
-        web.seeother("/")
+
+        # send them back where they came from
+        destination = '/'
+        if 'login_redirect' in session:
+            destination = session['login_redirect']
+        print("redirecting to {0}".format(destination))
+        web.seeother(destination)
 
 
 class Logout(object):
@@ -120,8 +132,14 @@ class Logout(object):
         data = web.input()
         report_init("LOGOUT", "GET", data)
         web.setcookie(constants.REMEMBER_COOKIE_NAME, "", expires=-1, domain="auth.local", path="/")
+
+        destination = '/'
+        if 'login_redirect' in session:
+            destination = session['login_redirect']
+
         session.kill()
-        web.seeother("/")
+        print("redirecting to {0}".format(destination))
+        web.seeother(destination)
 
     def POST(self):
         print(" LOGOUT POST ".center(50, '-'))
@@ -134,49 +152,29 @@ class Authorize(object):
         self._authorization_endpoint = oauth_server
         print("finished init")
 
-    def GET(self):
-        """
-        There are many bits of information the OAuth server can ingest.
-        These bits of information are received either through the uri query string,
-        Or the body (data) of the request.
-        See `Request` constructor in oauthlib/common.py
-        Minimum required are: [client_id, redirect_uri, response_type, scope]
-            "access_token": None,
-            "client": None,
-            "client_id": None,
-            "client_secret": None,
-            "code": None,
-            "extra_credentials": None,
-            "grant_type": None,
-            "redirect_uri": None,
-            "refresh_token": None,
-            "request_token": None,
-            "response_type": None,
-            "scope": None,
-            "scopes": None,
-            "state": None,
-            "token": None,
-            "user": None,
-            "token_type_hint": None,
+    def get_user_id(self):
+        if "logged_in" in session and session['logged_in'] is True and "user_id" in session:
+            return session['user_id']
 
-            # OpenID Connect
-            "response_mode": None,
-            "nonce": None,
-            "display": None,
-            "prompt": None,
-            "claims": None,
-            "max_age": None,
-            "ui_locales": None,
-            "id_token_hint": None,
-            "login_hint": None,
-            "acr_values": None
-        :return:
-        """
+        cookie = web.cookies().get(constants.REMEMBER_COOKIE_NAME)
+        if cookie:
+            cookie_parts = cookie.split(":")
+            if len(cookie_parts) == 3:
+                uid, token, hash = cookie_parts
+                if common.users.validate_login_cookie(uid, token, hash):
+                    session['logged_in'] = True
+                    session['user_id'] = uid
+                    return uid
+        return None
+
+    def GET(self):
         data = web.input()
         report_init("AUTHORIZE", "GET", data)
+        # TODO: host should be web.ctx.env['SERVER_NAME']
+        # but that doesn't work for testing here.
         uri = "{scheme}://{host}{port}{path}".format(
             scheme=web.ctx.env.get('wsgi.url_scheme', 'http'),
-            host=web.ctx.env['SERVER_NAME'],
+            host='auth.local',  # web.ctx.env['SERVER_NAME'],
             port=':{0}'.format(web.ctx.env['SERVER_PORT']),
             path=web.ctx.env['REQUEST_URI']
         )
@@ -190,26 +188,35 @@ class Authorize(object):
             scopes, credentials = self._authorization_endpoint.validate_authorization_request(
                 uri, http_method, body, headers)
 
+            # Store some important information for later.
             # Not necessarily in session but they need to be
             # accessible in the POST view after form submit.
-
-            # NOTE: I need to remove "request" because it stores custom data structures
+            # NOTE: I need to remove "request" because it contains custom data structures
             # and fails to be properly pickled into the session storage
             credentials.pop("request", None)
-            print("")
-            print(credentials)
-            # session['oauth2_credentials'] = credentials
+            session['oauth2_credentials'] = credentials
+            session['oauth2_scopes'] = scopes
+            session['login_redirect'] = uri
 
-            # You probably want to render a template instead.
-            return common.render.authorize(scopes, credentials)
+            # Display authorization page
+            user_id = self.get_user_id()
+            if user_id:
+                user = common.users.get_by_id(user_id)
+                app = common.applications.get(credentials['client_id'])
+                # if logged in, display authorization page
+                credentials['user'] = user_id
+                return common.render.authorize(user.name, app.nicename)
+            else:
+                # otherwise, display login page
+                print("redirecting to /login")
+                raise web.seeother("/login")
 
         # Errors that should be shown to the user on the provider website
         except errors.FatalClientError as e:
             return response_from_error(e)
-
         # Errors embedded in the redirect URI back to the client
-        # except errors.OAuth2Error as e:
-        #    return HttpResponseRedirect(e.in_uri(e.redirect_uri))
+        except errors.OAuth2Error as e:
+            raise web.seeother(e.in_uri(e.redirect_uri))
 
         # Something else went wrong.
         except Exception:
@@ -218,8 +225,7 @@ class Authorize(object):
         return "reached end of GET code"
 
     def POST(self):
-        test_scopes = []
-        data = web.input(scopes=test_scopes)
+        data = web.input()
         report_init("AUTHORIZE", "POST", data)
         uri = "{scheme}://{host}{port}{path}".format(
             scheme=web.ctx.env.get('wsgi.url_scheme', 'http'),
@@ -233,20 +239,17 @@ class Authorize(object):
         headers.pop("wsgi.errors", None)
         headers.pop("wsgi.input", None)
 
-        # The scopes the user actually authorized, i.e. checkboxes
-        # that were selected.
-        scopes = data.get('scopes', [])
+        # Did the user approve access?
+        approved = data.get('approved') == "yes"
 
-        print("Scopes: {0}".format(repr(scopes)))
-
+        # TODO: What if approved is not True?
         # Extra credentials we need in the validator
-        # credentials = {'user': request.user}
-        # TODO: what goes here?
-        credentials = {'user': 'temp'}
+        credentials = {'user': self.get_user_id()}
 
         # The previously stored (in authorization GET view) credentials
         # probably contains: 'state', 'redirect_uri', 'response_type', 'client_id'
-        credentials.update(data)
+        credentials.update(session.get('oauth2_credentials', {}))
+        scopes = session.get('oauth2_scopes', [])
 
         try:
             print("creating authorization response\n")
@@ -306,10 +309,9 @@ class Token(object):
 
 
 def response_from_return(headers, body, status):
-
-    print("doing response_from_return(...)")
-    print("  headers: {0}".format(headers))
-    print("  body: {0}".format(body))
+    print("response_from_return(...)")
+    print("  headers: {0}".format(str(headers)[:50]))
+    print("  body: {0}".format(str(body)[:50]))
     print("  status: {0}".format(status))
     # raise web.HTTPError(status, headers, body)
     raise web.HTTPError('200 OK', headers, body)

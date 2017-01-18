@@ -1,4 +1,4 @@
-$def with (scopes, credentials)
+$def with (username, appname)
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,13 +6,11 @@ $def with (scopes, credentials)
   <title>Authorization</title>
 </head>
 <body>
-<h1> Authorize access</h1>
+<h1>Log in to $appname as $username.title()?</h1>
 <form method="POST" action="/authorize">
-  $for scope in scopes or []:
-    <input type="checkbox" name="scopes" value="$scope"/> $scope
-  $for k, v in credentials.iteritems():
-    <input type="hidden" name="$k" value="$v"/>
+  <input type="hidden" name="approved" value="yes"/>
   <input type="submit" value="Authorize"/>
 </form>
+<a href="/logout">Different user</a>
 </body>
 </html>
