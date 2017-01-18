@@ -1,22 +1,12 @@
 import os
-import sys
-import urllib
-import urllib2
-import base64
-import logging
-import requests_oauthlib
 import web
+import pprint
 web.config.debug = False
 from web.wsgiserver import CherryPyWSGIServer
 from ConfigParser import SafeConfigParser
+import oauth_consumer
+import oauthlib.oauth2.rfc6749.errors
 
-
-log = logging.getLogger('oauthlib')
-log.addHandler(logging.StreamHandler(sys.stdout))
-log.setLevel(logging.DEBUG)
-log = logging.getLogger('requests_oauthlib.oauth2_session')
-log.addHandler(logging.StreamHandler(sys.stdout))
-log.setLevel(logging.DEBUG)
 
 # ====================================================
 
@@ -87,93 +77,95 @@ class Public(object):
 
 class Private(object):
     def __init__(self):
-        if "counter" not in session:
-            session['counter'] = 0
-        else:
-            session['counter'] += 1
-        self.redirect_uri = unicode(config.get('general', 'redirect_uri'))
-        self.response_type = u'code'
-        self.client_id = unicode(config.get('credentials', 'client_id'))
-        self.client_secret = unicode(config.get('credentials', 'client_secret'))
-        self.scope = unicode(config.get('general', 'scope'))
+        self.oauth = oauth_consumer.Authorization(
+            session=session,
+            authorization_url=config.get('authentication', 'authorization_url'),
+            token_url=config.get('authentication', 'token_url'),
+            client_id=config.get('credentials', 'client_id'),
+            client_secret=config.get('credentials', 'client_secret'),
+            default_redirect_uri=config.get('general', 'redirect_uri'),
+            default_scope_requested=config.get('general', 'scope')
+        )
 
-    def retrieve_key(self, GET_data):
-        print("retrieving key.")
+    def GET(self):
+        data = web.input()
+        report_init("PRIVATE", "GET", session, data)
+
+        # if the user is already logged in, just show them the page
+        if session.get('logged_in', False) is True:
+            return render.private_page()
+
+        # send back to public page
+        print("redirecting to /public")
+        raise web.seeother("/public")
+
+    def POST(self):
+        data = web.input()
+        report_init("PRIVATE", "POST", session, data)
+
+
+class Login(object):
+    def __init__(self):
+        self.redirect_uri = unicode(config.get('general', 'login_uri'))
+        self.scope = unicode(config.get('general', 'scope'))
+        self.oauth = oauth_consumer.Authorization(
+            session=session,
+            authorization_url=config.get('authentication', 'authorization_url'),
+            token_url=config.get('authentication', 'token_url'),
+            client_id=config.get('credentials', 'client_id'),
+            client_secret=config.get('credentials', 'client_secret'),
+            default_redirect_uri=config.get('general', 'redirect_uri'),
+            default_scope_requested=config.get('general', 'scope')
+        )
+
+    def get_token(self):
         authorization_response = "{scheme}://{host}{port}{path}".format(
             scheme=web.ctx.env.get('wsgi.url_scheme', 'https'),
             host=web.ctx.env['SERVER_NAME'],
             port=':{0}'.format(web.ctx.env['SERVER_PORT']),
             path=web.ctx.env['REQUEST_URI']
         )
-        oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=self.scope)
-        print("authorization response is {0}".format(authorization_response))
+        try:
+            # redirect_uri must match between get_auth_code and get_token.
+            # scope must match between get_auth_code and get_token
+            token = self.oauth.fetch_token(authorization_response, redirect_uri=self.redirect_uri, scope=self.scope)
+        except oauthlib.oauth2.rfc6749.errors.AccessDeniedError:
+            print("Access was denied. Reason unknown.")
+            return False
 
-        # TODO: verify = FALSE only for testing
-        token = oauth.fetch_token(
-            config.get('authentication', 'token_url'),
-            authorization_response=authorization_response,
-            client_secret=self.client_secret,
-            verify=False)
-        print("token is {0}".format(token))
-        session['bearer_token'] = token
+        print("\n\nToken acquired!")
+        pprint.pprint(token)
+        print("")
+        return True
 
-    def GET(self):
-        data = web.input()
-        report_init("PRIVATE", "GET", session, data)
-
-        if 'code' in data:
-            print('"code" encountered. Retrieving key.')
-            self.retrieve_key(data)
-
-        if 'bearer_token' in session:
-            print('"bearer_token" is installed. granting access.')
-            return render.private_page()
-        else:
-            print("redirecting to /public")
-            raise web.seeother("/public")
-
-    def POST(self):
-        data = web.input()
-        report_init("PRIVATE", "POST", session, data)
-        print("redirecting back to public.")
-        raise web.seeother("/public")
-
-
-class Login(object):
-    def __init__(self):
-        if "counter" not in session:
-            session['counter'] = 0
-        else:
-            session['counter'] += 1
-        self.redirect_uri = unicode(config.get('general', 'redirect_uri'))
-        self.response_type = u'code'
-        self.client_id = unicode(config.get('credentials', 'client_id'))
-        self.client_secret = unicode(config.get('credentials', 'client_secret'))
-        self.scope = unicode(config.get('general', 'scope'))
-
+    def get_auth_code(self):
+        print("redirect_uri is {0}".format(self.redirect_uri))
+        # redirect_uri must match between get_auth_code and get_token.
+        # scope must match between get_auth_code and get_token
+        authorization_url = self.oauth.get_auth_url(redirect_uri=self.redirect_uri, scope=self.scope)
+        print("redirecting to {0}".format(authorization_url))
+        raise web.seeother(authorization_url)
 
     def GET(self):
         data = web.input()
         report_init("LOGIN", "GET", session, data)
 
-        # Generate a random hash and store in the session for security
-        seq = os.urandom(48)
-        enc_seq = base64.b64encode(seq)
-        session['state'] = enc_seq
-        session.pop('access_token', None)
-        print("redirect_uri is {0}".format(self.redirect_uri))
-        print("scope is {0}, {0.__class__}".format(self.scope))
-        oauth = requests_oauthlib.OAuth2Session(self.client_id, redirect_uri=self.redirect_uri, scope=unicode(self.scope))
-        authorization_url, state = oauth.authorization_url(
-            config.get('authentication', 'authorization_url'),
-            # access_type and approval_prompt are Google specific extra
-            # parameters.
-            access_type="offline", approval_prompt="force")
-        print("---\nAuthorizing.")
-        print("Auth_url is {0}".format(authorization_url[:50]))
-        print("State is {0}".format(str(state)[:50]))
-        print("redirecting to {0}".format(authorization_url))
-        raise web.seeother(authorization_url)
+        if 'state' in data and 'code' in data:
+            print("state and code found. Assuming to be at fetch_token step.")
+            if self.get_token():
+                print("get_token returned True. setting logged_in to True")
+                session['logged_in'] = True
+                raise web.seeother('/private')
+            else:
+                print("get_token returned False. setting logged_in to False")
+                session['logged_in'] = False
+                raise web.seeother('/public')
+        else:
+            print("begin authentication process.")
+            self.get_auth_code()
+
+        # this code should be unreachable.
+        raise web.seeother('/public')
 
     def POST(self):
         data = web.input()

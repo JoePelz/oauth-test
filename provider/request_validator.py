@@ -1,13 +1,10 @@
 import inspect
 import common
 from oauthlib.oauth2 import RequestValidator
+from oauthlib.oauth2.rfc6749.clients import WebApplicationClient
 from models.applications import Applications
 from models.authorization_codes import AuthorizationCodes
 from models.bearer_tokens import BearerTokens
-
-
-class dummy():
-    pass
 
 
 class MyRequestValidator(RequestValidator):
@@ -92,10 +89,7 @@ class MyRequestValidator(RequestValidator):
         print("request.client_id: {0}".format(request.client_id))
         print("request.code: {0}".format(request.code))
         print("request.client_secret: {0}".format(request.client_secret))
-        client = dummy()
-        client.client_id = request.client_id
-        # client.client_secret = request.client_secret
-        request.client = client
+        request.client = WebApplicationClient(request.client_id, code=request.code, client_secret=request.client_secret)
         return True
 
     def authenticate_client_id(self, app_id, request, *args, **kwargs):
@@ -122,6 +116,7 @@ class MyRequestValidator(RequestValidator):
 
     def confirm_redirect_uri(self, app_id, code, redirect_uri, client, *args, **kwargs):
         # You did save the redirect uri with the authorization code right?
+        print("confirm_redirect_uri")
         auth = AuthorizationCodes(common.db)
         match = auth.match(app_id=client.client_id, code=code)
         if not match:

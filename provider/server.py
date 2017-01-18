@@ -306,7 +306,7 @@ class Token(object):
         # If you wish to include request specific extra credentials for
         # use in the validator, do so here.
         credentials = {
-            'foo': 'bar'
+            #'foo': 'bar'
         }
 
         headers, body, status = self._token_endpoint.create_token_response(
@@ -322,7 +322,6 @@ def response_from_return(headers, body, status):
     print("  headers: {0}".format(headers))
     print("  body: {0}".format(body))
     print("  status: {0}".format(status))
-    raise web.seeother("http://www.google.ca")
     # raise web.HTTPError(status, headers, body)
     raise web.HTTPError('200 OK', headers, body)
 
