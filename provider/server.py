@@ -1,19 +1,14 @@
-import pprint
 import traceback
 from oauthlib.oauth2 import WebApplicationServer
 import oauthlib.oauth2.rfc6749.errors as errors
 import logging
 import sys
-import json
 import web
 web.config.debug = False
 from web.wsgiserver import CherryPyWSGIServer
 import constants
 import common
 from request_validator import MyRequestValidator
-from models.users import Users
-from models.subscriptions import Subscriptions
-from models.applications import Applications
 
 # enable logging, while under development
 log = logging.getLogger('oauthlib')
@@ -42,10 +37,6 @@ def report_init(page, protocol, webinput):
 
 
 class Home(object):
-    def __init__(self):
-        self.users = Users(common.db)
-        self.subscriptions = Subscriptions(common.db)
-        self.applications = Applications(common.db)
 
     def get_user_id(self):
         if "logged_in" in session and session['logged_in'] is True and "user_id" in session:
@@ -56,26 +47,27 @@ class Home(object):
             cookie_parts = cookie.split(":")
             if len(cookie_parts) == 3:
                 uid, token, hash = cookie_parts
-                if self.users.validate_login_cookie(uid, token, hash):
+                if common.users.validate_login_cookie(uid, token, hash):
                     session['logged_in'] = True
                     session['user_id'] = uid
                     return uid
         return None
 
     def get_user_data(self, user_id):
-        user = dict(self.users.get_by_id(user_id))
+        user = dict(common.users.get_by_id(user_id))
 
         # accessible apps
-        subs = self.subscriptions.get_by_user(user_id)
+        subs = common.subscriptions.get_by_user(user_id)
         user['subscriptions'] = map(dict, subs)
 
         # ownded apps
-        apps = self.applications.get_by_owner(user_id)
+        apps = common.applications.get_by_owner(user_id)
         user['apps'] = apps
 
         return user
 
     def GET(self):
+        print("GET begins")
         data = web.input()
         report_init("HOME", "GET", data)
 
@@ -90,16 +82,13 @@ class Home(object):
 
 
 class Login(object):
-    def __init__(self):
-        self.users = Users(common.db)
-
     def save_cookie(self, account_id):
         print("Saving, for remembering later.")
-        cookie_text = self.users.get_login_cookie(account_id)
+        cookie_text = common.users.get_login_cookie(account_id)
         duration = 31536000  # 60*60*24*365 # 1 year-ish
-        # TODO: set secure=True to require HTTPS
+        # TODO: what is httponly? needed?
         # TODO: does the domain or path need to be set?
-        web.setcookie(constants.REMEMBER_COOKIE_NAME, cookie_text, expires=duration, domain="auth.local", path="/")
+        web.setcookie(constants.REMEMBER_COOKIE_NAME, cookie_text, expires=duration, domain="auth.local", path="/", secure=True)
         # setcookie(name, value, expires='', domain=None, secure=False, httponly=False, path=None):
 
     def get_user(self, data):
@@ -110,7 +99,7 @@ class Login(object):
         except KeyError:
             return None
 
-        user = self.users.get(email, password)
+        user = common.users.get(email, password)
         return user
 
     def POST(self):

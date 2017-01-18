@@ -79,8 +79,9 @@ class Authorization(object):
             self.token_url,
             authorization_response=authorization_response_url,
             client_secret=self.client_secret,
-            verify=False
-        )
+            verify=False)
+
+
         self.save_token(token)
 
     def request(self, protected_url):

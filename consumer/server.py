@@ -56,12 +56,6 @@ def report_init(page, protocol, session, webinput):
 
 
 class Public(object):
-    def __init__(self):
-        if "counter" not in session:
-            session['counter'] = 0
-        else:
-            session['counter'] += 1
-
     def GET(self):
         data = web.input()
         report_init("PUBLIC", "GET", session, data)
@@ -84,8 +78,7 @@ class Private(object):
             client_id=config.get('credentials', 'client_id'),
             client_secret=config.get('credentials', 'client_secret'),
             default_redirect_uri=config.get('general', 'redirect_uri'),
-            default_scope_requested=config.get('general', 'scope')
-        )
+            default_scope_requested=config.get('general', 'scope'))
 
     def GET(self):
         data = web.input()
@@ -115,22 +108,23 @@ class Login(object):
             client_id=config.get('credentials', 'client_id'),
             client_secret=config.get('credentials', 'client_secret'),
             default_redirect_uri=config.get('general', 'redirect_uri'),
-            default_scope_requested=config.get('general', 'scope')
-        )
+            default_scope_requested=config.get('general', 'scope'))
 
     def get_token(self):
         authorization_response = "{scheme}://{host}{port}{path}".format(
             scheme=web.ctx.env.get('wsgi.url_scheme', 'https'),
             host=web.ctx.env['SERVER_NAME'],
             port=':{0}'.format(web.ctx.env['SERVER_PORT']),
-            path=web.ctx.env['REQUEST_URI']
-        )
+            path=web.ctx.env['REQUEST_URI'])
         try:
             # redirect_uri must match between get_auth_code and get_token.
             # scope must match between get_auth_code and get_token
             token = self.oauth.fetch_token(authorization_response, redirect_uri=self.redirect_uri, scope=self.scope)
         except oauthlib.oauth2.rfc6749.errors.AccessDeniedError:
             print("Access was denied. Reason unknown.")
+            return False
+        except oauthlib.oauth2.rfc6749.errors.InvalidGrantError:
+            print("Access was denied. Error: Invalid Grant.")
             return False
 
         print("\n\nToken acquired!")
@@ -202,9 +196,8 @@ DBFILENAME = 'dev.db'
 config = SafeConfigParser()
 config.read("app.cfg")
 
-# openssl req -x509 -sha256 -nodes -newkey rsa:2048 -days 365 -keyout localhost.key -out localhost.crt
-CherryPyWSGIServer.ssl_certificate = "./localhost.crt"
-CherryPyWSGIServer.ssl_private_key = "./localhost.key"
+CherryPyWSGIServer.ssl_certificate = "./" + config.get('ssl', 'certificate')
+CherryPyWSGIServer.ssl_private_key = "./" + config.get('ssl', 'key')
 
 app = web.application(urls, globals())
 

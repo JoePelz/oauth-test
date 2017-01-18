@@ -103,3 +103,12 @@ class Applications(object):
 
         self.db.insert(self.table, **qvars)
         return app_id
+
+    def secret_matches_id(self, app_id, secret):
+        where = 'app_id=$aid AND secret_key=$secret'
+        qvars = {
+            'aid': app_id,
+            'secret': secret
+        }
+        rows = self.db.select(self.table, where=where, vars=qvars, limit=1)
+        return bool(rows.first())

@@ -4,6 +4,12 @@ import constants
 import web
 import base64
 import math
+from models.users import Users
+from models.subscriptions import Subscriptions
+from models.applications import Applications
+from models.authorization_codes import AuthorizationCodes
+from models.bearer_tokens import BearerTokens
+
 
 def b64_url_encode(bytes):
     return base64.b64encode(bytes, "-_")
@@ -22,8 +28,13 @@ def generate_salt(length):
     return encoded[:length]
 
 
-db = dbsetup.get_db()
+_db = dbsetup.get_db()
+users = Users(_db)
+subscriptions = Subscriptions(_db)
+applications = Applications(_db)
+authorization_codes = AuthorizationCodes(_db)
+bearer_tokens = BearerTokens(_db)
 
 render = web.template.render(os.path.join(constants.BASE_PATH, 'templates'))
 
-session_store = web.session.DBStore(db, 'sessions')
+session_store = web.session.DBStore(_db, 'sessions')

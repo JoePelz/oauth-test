@@ -2,15 +2,9 @@ import inspect
 import common
 from oauthlib.oauth2 import RequestValidator
 from oauthlib.oauth2.rfc6749.clients import WebApplicationClient
-from models.applications import Applications
-from models.authorization_codes import AuthorizationCodes
-from models.bearer_tokens import BearerTokens
 
 
 class MyRequestValidator(RequestValidator):
-    def __init__(self):
-        self.apps = Applications(common.db)
-
     # Ordered roughly in order of appearance in the authorization grant flow
 
     # Pre- and post-authorization.
@@ -18,14 +12,14 @@ class MyRequestValidator(RequestValidator):
     def validate_client_id(self, app_id, request, *args, **kwargs):
         # Simple validity check, does client exist? Not banned?
         print("validate app id")
-        app = self.apps.exists(app_id)
+        app = common.applications.exists(app_id)
         return app
 
     def validate_redirect_uri(self, app_id, redirect_uri, request, *args, **kwargs):
         # Is the client allowed to use the supplied redirect_uri? i.e. has
         # the client previously registered this EXACT redirect uri.
         print("validate redirect uri")
-        app = self.apps.get(app_id)
+        app = common.applications.get(app_id)
         uris = app.redirect_uris.split(' ')
         return redirect_uri and redirect_uri in uris
 
@@ -34,13 +28,13 @@ class MyRequestValidator(RequestValidator):
         # Prefer your clients to pre register a redirect uri rather than
         # supplying one on each authorization request.
         print("get default redirect uri")
-        app = self.apps.get(app_id)
+        app = common.applications.get(app_id)
         return app.default_redirect_uri
 
     def validate_scopes(self, app_id, scopes, client, request, *args, **kwargs):
         # Is the client allowed to access the requested scopes?
         print("validate_scopes")
-        app = self.apps.get(app_id)
+        app = common.applications.get(app_id)
         app_scopes = app.scopes.split(' ')
         return all([requested_scope in app_scopes for requested_scope in scopes])
 
@@ -48,7 +42,7 @@ class MyRequestValidator(RequestValidator):
         # Scopes a client will authorize for if none are supplied in the
         # authorization request.
         print("get_default_scopes")
-        app = self.apps.get(app_id)
+        app = common.applications.get(app_id)
         return app.default_scopes
 
     def validate_response_type(self, app_id, response_type, client, request, *args, **kwargs):
@@ -56,7 +50,7 @@ class MyRequestValidator(RequestValidator):
         # one associated with their one allowed grant type.
         # In this case it must be "code".
         print("validate response type")
-        app = self.apps.get(app_id)
+        app = common.applications.get(app_id)
         return response_type == app.response_type
 
     # Post-authorization
@@ -71,13 +65,13 @@ class MyRequestValidator(RequestValidator):
         print("request is {0}".format(request))
         code_string = code['code']
         state = code.get('state', '')
-        auth = AuthorizationCodes(common.db)
-        auth.set(application_id=app_id,
-                 user_id=request.user,
-                 code=code_string,
-                 scopes=' '.join(request.scopes),
-                 state=state,
-                 redirect_uri=request.redirect_uri)
+        common.authorization_codes.set(
+            app_id=app_id,
+            user_id=request.user,
+            code=code_string,
+            scopes=' '.join(request.scopes),
+            state=state,
+            redirect_uri=request.redirect_uri)
 
     # Token request
 
@@ -86,11 +80,20 @@ class MyRequestValidator(RequestValidator):
         # TODO: generate secret for each client app. Use app id and secret to authenticate client.
         # see https://github.com/evonove/django-oauth-toolkit/blob/master/oauth2_provider/oauth2_validators.py#L51
         print("authenticate_client")
-        print("request.client_id: {0}".format(request.client_id))
-        print("request.code: {0}".format(request.code))
-        print("request.client_secret: {0}".format(request.client_secret))
-        request.client = WebApplicationClient(request.client_id, code=request.code, client_secret=request.client_secret)
-        return True
+        authenticated = True
+
+        app_secret = request.client_secret
+        app_id = request.client_id
+        auth_code = request.code
+
+        # make sure client_secret matches client_id
+        if authenticated:
+            authenticated = common.applications.secret_matches_id(app_id, app_secret)
+
+        # store credentials (This is a side effect, but OAuthLib raises an exception if this isn't done here.)
+        if authenticated:
+            request.client = WebApplicationClient(app_id, code=auth_code, client_secret=app_secret)
+        return authenticated
 
     def authenticate_client_id(self, app_id, request, *args, **kwargs):
         # Don't allow public (non-authenticated) clients
@@ -100,29 +103,32 @@ class MyRequestValidator(RequestValidator):
         # Validate the code belongs to the client. Add associated scopes,
         # state and user to request.scopes and request.user.
         print("validate_code")
-        auth = AuthorizationCodes(common.db)
-        print("client is {0}".format(client))
-        print("client.client_id is {0}".format(client.client_id))
-        match = auth.match(app_id=client.client_id, code=code)
-        # TODO: test if expiration time is passed
-        # TODO: test if state (salt) matches
-        if match:
-            request.scopes = match.scopes.split(' ')
-            request.user = match.user_id
-            request.state = match.state
-            return True
-        else:
-            return False
+
+        # App_id has been confirmed. does the code match the app?
+        # make sure the code applies to the (previously authenticated) client/app.
+        authorization = common.authorization_codes.get(code)
+        valid = app_id == authorization.app_id
+
+        # make sure the granted state/user/scopes/redirect are all saved in the request object
+        # This is a side effect, but required by the library.
+        if valid:
+            request.scopes = authorization.scopes.split(' ')
+            request.user = authorization.user_id
+            request.state = authorization.state
+            request.client.auth_redirect_uri = authorization.redirect_uri
+
+        return valid
 
     def confirm_redirect_uri(self, app_id, code, redirect_uri, client, *args, **kwargs):
         # You did save the redirect uri with the authorization code right?
         print("confirm_redirect_uri")
-        auth = AuthorizationCodes(common.db)
-        match = auth.match(app_id=client.client_id, code=code)
-        if not match:
-            return False
-        saved_redirect_uri = match.redirect_uri
-        return saved_redirect_uri == redirect_uri
+
+        requested_uri = redirect_uri
+        authorized_uri = client.auth_redirect_uri
+
+        confirmed = requested_uri == authorized_uri
+
+        return confirmed
 
     def validate_grant_type(self, app_id, grant_type, client, request, *args, **kwargs):
         # Clients should only be allowed to use one type of grant.
@@ -143,18 +149,17 @@ class MyRequestValidator(RequestValidator):
         access_token_code = token['access_token']
         refresh_token_code = token.get('refresh_token', None)
 
-        bt = BearerTokens(common.db)
-        bt.set(application_id=request.client.client_id,
-               user=request.user,
-               scopes=scope,
-               access_token=access_token_code,
-               refresh_token=refresh_token_code)
+        common.bearer_tokens.set(
+            application_id=request.client.client_id,
+            user=request.user,
+            scopes=scope,
+            access_token=access_token_code,
+            refresh_token=refresh_token_code)
 
     def invalidate_authorization_code(self, app_id, code, request, *args, **kwargs):
         # Authorization codes are use once, invalidate it when a Bearer token
         # has been acquired.
-        auth = AuthorizationCodes(common.db)
-        auth.remove(app_id, code)
+        common.authorization_codes.remove(code)
 
     # Protected resource request
 
@@ -162,8 +167,7 @@ class MyRequestValidator(RequestValidator):
         # Remember to check expiration and scope membership
         # TODO: Remember to check expiration and scope membership
         print("validate_bearer_token")
-        bt = BearerTokens(common.db)
-        db_token = bt.get_access(token)
+        db_token = common.bearer_tokens.get_access(token)
         return db_token and all([scope in db_token.scopes for scope in scopes])
 
     # Token refresh request
@@ -174,8 +178,7 @@ class MyRequestValidator(RequestValidator):
         # access token if the client did not specify a scope during the
         # request.
         print("get_original_scopes")
-        bt = BearerTokens(common.db)
-        db_token = bt.get_access(refresh_token)
+        db_token = common.bearer_tokens.get_access(refresh_token)
         scopes = db_token.scopes.split(' ')
         return scopes
 
